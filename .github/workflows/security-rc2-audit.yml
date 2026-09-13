@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit:
@@ -26,48 +26,83 @@ jobs:
       - name: Install exact RC2 dependencies
         run: npm ci
 
-      - name: Audit complete dependency graph
+      - name: Record pre-fix audit
+        shell: bash
+        run: |
+          npm audit --json > npm-audit-before.json || true
+          cat npm-audit-before.json
+
+      - name: Apply lockfile-only security fix
+        shell: bash
+        run: |
+          npm audit fix --package-lock-only
+          git diff -- package-lock.json
+
+      - name: Reinstall corrected dependency graph
+        run: npm ci
+
+      - name: Audit corrected dependency graph
         shell: bash
         run: |
           npm audit --json > npm-audit-all.json || true
-          cat npm-audit-all.json
-
-      - name: Audit production dependencies only
-        shell: bash
-        run: |
           npm audit --omit=dev --json > npm-audit-prod.json || true
+          cat npm-audit-all.json
           cat npm-audit-prod.json
 
-      - name: Print normalized audit summary
+      - name: Assert no high or critical vulnerabilities
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('fs');
-          for (const [label, file] of [['all', 'npm-audit-all.json'], ['production', 'npm-audit-prod.json']]) {
+          for (const file of ['npm-audit-all.json', 'npm-audit-prod.json']) {
             const audit = JSON.parse(fs.readFileSync(file, 'utf8'));
-            console.log(`=== ${label.toUpperCase()} ===`);
-            console.log(JSON.stringify(audit.metadata?.vulnerabilities ?? {}, null, 2));
-            for (const [name, finding] of Object.entries(audit.vulnerabilities ?? {})) {
-              console.log(JSON.stringify({
-                name,
-                severity: finding.severity,
-                isDirect: finding.isDirect,
-                via: finding.via,
-                effects: finding.effects,
-                range: finding.range,
-                nodes: finding.nodes,
-                fixAvailable: finding.fixAvailable
-              }, null, 2));
-            }
+            const v = audit.metadata?.vulnerabilities ?? {};
+            console.log(file, JSON.stringify(v));
+            if ((v.high ?? 0) !== 0 || (v.critical ?? 0) !== 0) process.exit(1);
           }
           NODE
 
-      - name: Upload audit evidence
+      - name: Verify fixed js-yaml version
+        shell: bash
+        run: |
+          node <<'NODE'
+          const lock = require('./package-lock.json');
+          const pkg = lock.packages['node_modules/js-yaml'];
+          console.log(JSON.stringify(pkg, null, 2));
+          if (!pkg?.version) process.exit(1);
+          const [maj,min,patch] = pkg.version.split('.').map(Number);
+          if (maj < 4 || (maj === 4 && min < 3) || (maj === 4 && min === 3 && patch < 2)) process.exit(1);
+          NODE
+
+      - name: Run type check
+        run: npm run check
+
+      - name: Build frontend
+        env:
+          VITE_ENV: production
+        run: npm run build
+
+      - name: Upload security evidence
         uses: actions/upload-artifact@v4
         with:
-          name: rc2-npm-audit
+          name: rc2-security-fix-evidence
           path: |
+            npm-audit-before.json
             npm-audit-all.json
             npm-audit-prod.json
+            package-lock.json
           if-no-files-found: error
           retention-days: 90
+
+      - name: Commit corrected lockfile
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'No lockfile change required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'fix(security): update js-yaml lockfile [skip ci]'
+          git push
