@@ -244,10 +244,13 @@ describe(
       expect(
         await screen.findByText("Previous layout kept in Layouts"),
       ).toBeInTheDocument();
-      // The dialog itself closes once resolved.
-      expect(
-        screen.queryByText(/Replace this layout\?/i),
-      ).not.toBeInTheDocument();
+      // The dialog itself closes once resolved; bits-ui keeps its closed DOM
+      // node mounted briefly for the exit transition, so await removal.
+      await waitFor(() => {
+        expect(
+          screen.queryByText(/Replace this layout\?/i),
+        ).not.toBeInTheDocument();
+      });
     });
 
     it("Cancel keeps the restored local layout and never applies the shared one", async () => {
