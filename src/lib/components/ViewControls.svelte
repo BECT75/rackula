@@ -96,7 +96,10 @@
       same positions used by the front and rear views.
     </p>
     {#if activeRack}
-      <RackSideView rack={activeRack} deviceLibrary={layoutStore.device_types} />
+      <RackSideView
+        rack={activeRack}
+        deviceLibrary={layoutStore.device_types}
+      />
     {:else}
       <p class="control-helper">Add a rack to display its side elevation.</p>
     {/if}

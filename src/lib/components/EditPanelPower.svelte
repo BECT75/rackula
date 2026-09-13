@@ -107,9 +107,13 @@
     {/each}
   </select>
   {#if outletOptions.length === 0}
-    <p class="helper">Add a placed device type with power outlets to assign power.</p>
+    <p class="helper">
+      Add a placed device type with power outlets to assign power.
+    </p>
   {:else}
-    <p class="helper">One device per PDU outlet. The assignment is saved with the project.</p>
+    <p class="helper">
+      One device per PDU outlet. The assignment is saved with the project.
+    </p>
   {/if}
   {#if error}
     <p class="error" role="alert">{error}</p>

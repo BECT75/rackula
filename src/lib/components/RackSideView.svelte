@@ -27,7 +27,8 @@
 
   function equipmentDepthMm(device: PlacedDevice): number {
     const type = findType(device);
-    const extendedDepth = (type as DeviceType & { depth_mm?: unknown })?.depth_mm;
+    const extendedDepth = (type as DeviceType & { depth_mm?: unknown })
+      ?.depth_mm;
     if (typeof extendedDepth === "number" && extendedDepth > 0) {
       return Math.min(extendedDepth, rackDepthMm);
     }
@@ -141,12 +142,11 @@
     height: var(--rack-height);
     min-height: 180px;
     border: 1px solid var(--colour-border);
-    background:
-      linear-gradient(
-        to top,
-        color-mix(in srgb, var(--colour-border) 28%, transparent) 1px,
-        transparent 1px
-      );
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--colour-border) 28%, transparent) 1px,
+      transparent 1px
+    );
     background-size: 100% 8px;
     overflow: hidden;
   }
@@ -194,7 +194,11 @@
     min-width: 12px;
     padding: 0 3px;
     border: 1px solid var(--colour-selection);
-    background: color-mix(in srgb, var(--colour-selection) 24%, var(--drawer-bg));
+    background: color-mix(
+      in srgb,
+      var(--colour-selection) 24%,
+      var(--drawer-bg)
+    );
     color: var(--colour-text);
     font-size: 9px;
     line-height: 1;

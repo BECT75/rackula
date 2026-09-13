@@ -48,7 +48,8 @@ export interface RackCatalogModel {
 
 const LEGRAND_SLIM5_BASE_URL =
   "https://www.legrandav.com/products/racks/floor_standing/slim_5_rack_frame";
-const STARTECH_FR_BASE_URL = "https://www.startech.com/fr-fr/gestion-de-serveurs";
+const STARTECH_FR_BASE_URL =
+  "https://www.startech.com/fr-fr/gestion-de-serveurs";
 
 const INCH_TO_MM = 25.4;
 

@@ -12,7 +12,9 @@ describe("Middle Atlantic Slim 5 rack catalog", () => {
     // The current manufacturer matrix is six documented RU heights x two depths.
     // eslint-disable-next-line no-restricted-syntax
     expect(MIDDLE_ATLANTIC_SLIM5_MODELS).toHaveLength(12);
-    expect(MIDDLE_ATLANTIC_SLIM5_MODELS.map((model) => model.part_number)).toEqual([
+    expect(
+      MIDDLE_ATLANTIC_SLIM5_MODELS.map((model) => model.part_number),
+    ).toEqual([
       "5-8",
       "5-8-26",
       "5-14",
@@ -44,10 +46,9 @@ describe("Middle Atlantic Slim 5 rack catalog", () => {
       const variants = MIDDLE_ATLANTIC_SLIM5_MODELS.filter(
         (model) => model.height_u === height,
       );
-      expect(variants.map((model) => model.depth_in).sort((a, b) => a - b)).toEqual([
-        20,
-        26,
-      ]);
+      expect(
+        variants.map((model) => model.depth_in).sort((a, b) => a - b),
+      ).toEqual([20, 26]);
     }
   });
 });
@@ -105,8 +106,12 @@ describe("StarTech WALLOA wall rack catalog", () => {
 
 describe("combined rack catalog", () => {
   it("finds entries across manufacturers", () => {
-    expect(findRackCatalogModel("5-29-26")?.manufacturer).toBe("Middle Atlantic");
-    expect(findRackCatalogModel("RK15WALLOA")?.manufacturer).toBe("StarTech.com");
+    expect(findRackCatalogModel("5-29-26")?.manufacturer).toBe(
+      "Middle Atlantic",
+    );
+    expect(findRackCatalogModel("RK15WALLOA")?.manufacturer).toBe(
+      "StarTech.com",
+    );
     expect(RACK_CATALOG.length).toBeGreaterThan(0);
   });
 });
