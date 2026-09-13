@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/base-test';
 import { resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
-import { loadFileFromDisk, locators } from './helpers';
+import { loadFileFromDisk, clickSave, clickExport, locators } from './helpers';
 
 const referenceProject = resolve(process.cwd(), 'qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml');
 const evidenceFile = resolve(process.cwd(), 'qualification/STEP-6-PERFORMANCE.results.json');
@@ -25,13 +25,11 @@ async function nextPaint(page: import('@playwright/test').Page) {
   await page.evaluate(() => new Promise<void>((resolvePaint) => requestAnimationFrame(() => resolvePaint())));
 }
 
-async function runPaletteCommandStable(page: import('@playwright/test').Page, actionId: string) {
-  const item = page.getByTestId(`command-palette-item-${actionId}`);
-  if (!(await item.isVisible())) {
-    await page.getByTestId('btn-command-palette').click();
-  }
-  await expect(item).toBeVisible();
-  await item.click();
+async function prepareReferenceState(page: import('@playwright/test').Page) {
+  await page.reload();
+  await loadFileFromDisk(page, referenceProject);
+  await expect(page.locator(locators.rackView.dualViewName)).toHaveCount(5, { timeout: 15000 });
+  await expect(page.locator(locators.rack.device).first()).toBeVisible({ timeout: 15000 });
 }
 
 async function measure(name: string, fn: () => Promise<void>) {
@@ -58,7 +56,7 @@ function writeEvidence() {
     commit: '650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795',
     reference_project: 'RACKULA_REFERENCE_PROJECT_V1',
     reference_load: { racks: 5, equipment: 150, ports: 1249, connections: 616 },
-    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations; immutable RC artifact; no rebuild',
+    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations; immutable RC artifact; no rebuild. Save/export samples are independently prepared outside the timed interval to avoid command-palette state carrying between samples.',
     threshold_origin: 'Phase 24 Step 6 qualification thresholds defined explicitly because the execution plan specified scenarios but no numeric V1 budgets.',
     qualification_thresholds_ms: qualificationThresholdsMs,
     metrics,
@@ -119,22 +117,24 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   await page.waitForTimeout(175);
 
   for (let i = 0; i < 3; i++) {
+    await prepareReferenceState(page);
     await measure('save', async () => {
       const downloadPromise = page.waitForEvent('download');
-      await runPaletteCommandStable(page, 'export-backup');
+      await clickSave(page);
       const download = await downloadPromise;
       await download.path();
     });
   }
 
   for (let i = 0; i < 3; i++) {
+    await prepareReferenceState(page);
     await measure('exportDialog', async () => {
-      await runPaletteCommandStable(page, 'export');
+      await clickExport(page);
       await expect(page.getByRole('dialog')).toBeVisible();
     });
-    await page.keyboard.press('Escape');
   }
 
+  await prepareReferenceState(page);
   for (let i = 0; i < 3; i++) {
     await measure('representativeManipulation', async () => {
       await devicesTab.click();
