@@ -1,12 +1,12 @@
 <!-- RACKULA CT power/PDU assignment for a selected placed device. -->
 <script lang="ts">
   import { getLayoutStore } from "$lib/stores/layout.svelte";
+  import {
+    getPowerAssignment,
+    isPowerOutletOccupied,
+    setPowerAssignment,
+  } from "$lib/utils/power-assignment";
   import type { SelectedDeviceInfo } from "$lib/types";
-
-  type CtPowerAssignment = {
-    pdu_device_id: string;
-    outlet_name: string;
-  };
 
   interface Props {
     selectedDeviceInfo: SelectedDeviceInfo;
@@ -16,18 +16,9 @@
   const layoutStore = getLayoutStore();
   let error = $state("");
 
-  const currentAssignment = $derived.by(() => {
-    const value = selectedDeviceInfo.placedDevice.custom_fields?.ct_power_assignment;
-    if (!value || typeof value !== "object") return null;
-    const candidate = value as Partial<CtPowerAssignment>;
-    if (
-      typeof candidate.pdu_device_id !== "string" ||
-      typeof candidate.outlet_name !== "string"
-    ) {
-      return null;
-    }
-    return candidate as CtPowerAssignment;
-  });
+  const currentAssignment = $derived(
+    getPowerAssignment(selectedDeviceInfo.placedDevice),
+  );
 
   const outletOptions = $derived.by(() => {
     const options: Array<{
@@ -66,31 +57,11 @@
       : "",
   );
 
-  function outletOccupied(pduDeviceId: string, outletName: string): boolean {
-    for (const rack of layoutStore.racks) {
-      for (const placed of rack.devices) {
-        if (placed.id === selectedDeviceInfo.placedDevice.id) continue;
-        const raw = placed.custom_fields?.ct_power_assignment;
-        if (!raw || typeof raw !== "object") continue;
-        const assignment = raw as Partial<CtPowerAssignment>;
-        if (
-          assignment.pdu_device_id === pduDeviceId &&
-          assignment.outlet_name === outletName
-        ) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   function applyAssignment(value: string) {
     error = "";
-    const customFields = { ...(selectedDeviceInfo.placedDevice.custom_fields ?? {}) };
 
     if (!value) {
-      delete customFields.ct_power_assignment;
-      selectedDeviceInfo.placedDevice.custom_fields = customFields;
+      setPowerAssignment(selectedDeviceInfo.placedDevice, null);
       layoutStore.markDirty();
       return;
     }
@@ -101,16 +72,22 @@
       return;
     }
 
-    if (outletOccupied(option.pduDeviceId, option.outletName)) {
+    if (
+      isPowerOutletOccupied(
+        layoutStore.racks,
+        option.pduDeviceId,
+        option.outletName,
+        selectedDeviceInfo.placedDevice.id,
+      )
+    ) {
       error = "This PDU outlet is already assigned to another device.";
       return;
     }
 
-    customFields.ct_power_assignment = {
+    setPowerAssignment(selectedDeviceInfo.placedDevice, {
       pdu_device_id: option.pduDeviceId,
       outlet_name: option.outletName,
-    } satisfies CtPowerAssignment;
-    selectedDeviceInfo.placedDevice.custom_fields = customFields;
+    });
     layoutStore.markDirty();
   }
 </script>
