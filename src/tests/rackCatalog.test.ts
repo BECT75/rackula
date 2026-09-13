@@ -7,6 +7,8 @@ import {
 
 describe("Middle Atlantic Slim 5 rack catalog", () => {
   it("contains the twelve Slim 5 height/depth variants", () => {
+    // The current manufacturer matrix is six documented RU heights x two depths.
+    // eslint-disable-next-line no-restricted-syntax
     expect(RACK_CATALOG).toHaveLength(12);
     expect(RACK_CATALOG.map((model) => model.part_number)).toEqual([
       "5-8",
