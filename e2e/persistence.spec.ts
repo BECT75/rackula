@@ -90,6 +90,63 @@ test.describe("Persistence", () => {
     });
   });
 
+  test("backup restores into a browser context with no inherited storage", async ({
+    page,
+    browser,
+  }) => {
+    await gotoWithRack(page, STANDARD_RACK_SHARE);
+    await dragDeviceToRack(page);
+    await expect(page.locator(locators.rack.device).first()).toBeVisible({
+      timeout: 5000,
+    });
+
+    const sourceDeviceCount = await page.locator(locators.rack.device).count();
+    const downloadPromise = page.waitForEvent("download");
+    await clickSave(page);
+    const download = await downloadPromise;
+    const savedPath = test
+      .info()
+      .outputPath("clean-context-backup.rackula.yaml");
+    await download.saveAs(savedPath);
+
+    const baseUrl = new URL(page.url()).origin;
+    const freshContext = await browser.newContext();
+
+    try {
+      // This context is created independently from the fixture context. Before
+      // the application is opened it must contain no origin storage at all.
+      const stateBeforeNavigation = await freshContext.storageState();
+      expect(stateBeforeNavigation.origins).toEqual([]);
+
+      // Keep browser-fs-access on the deterministic fallback path used by the
+      // normal E2E fixture: headless Chromium cannot interact with native file
+      // picker UI.
+      await freshContext.addInitScript(
+        `delete window.showOpenFilePicker; delete window.showSaveFilePicker; delete window.showDirectoryPicker;`,
+      );
+
+      const freshPage = await freshContext.newPage();
+      await freshPage.goto(baseUrl);
+      await freshPage
+        .locator(locators.rack.container)
+        .first()
+        .waitFor({ state: "visible" });
+
+      await loadFileFromDisk(freshPage, savedPath);
+      await expect(freshPage.locator(locators.toast.success).last()).toBeVisible({
+        timeout: 10000,
+      });
+
+      await expect(freshPage.locator(locators.rack.container).first()).toBeVisible();
+      await expect(freshPage.locator(locators.rack.device).first()).toBeVisible();
+      expect(await freshPage.locator(locators.rack.device).count()).toBe(
+        sourceDeviceCount,
+      );
+    } finally {
+      await freshContext.close();
+    }
+  });
+
   test("session storage preserves work on refresh", async ({ page }) => {
     // Place a device so we have something to verify after reload
     await dragDeviceToRack(page);
