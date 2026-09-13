@@ -1,9 +1,9 @@
 <!--
   EditPanelActions Component
-  Edit panel section: destructive actions for the selected device
-  (remove from rack, delete custom device type from library).
+  Device power assignment and destructive actions for the selected device.
 -->
 <script lang="ts">
+  import EditPanelPower from "./EditPanelPower.svelte";
   import { getLayoutStore } from "$lib/stores/layout.svelte";
   import { getSelectionStore } from "$lib/stores/selection.svelte";
   import { getToastStore } from "$lib/stores/toast.svelte";
@@ -21,15 +21,10 @@
   const selectionStore = getSelectionStore();
   const toastStore = getToastStore();
 
-  // Check if selected device is a custom (user-created) device
   const isSelectedDeviceCustom = $derived.by(() =>
     isCustomDevice(selectedDeviceInfo.device.slug),
   );
 
-  // Remove device from rack. Immediate with an undo toast rather than a
-  // confirm dialog: a device placement is trivially undoable, and the toast
-  // keeps this affordance consistent with the other four device-removal
-  // paths (#2993).
   function handleRemoveDevice() {
     const name = layoutStore.removeDeviceFromRack(
       selectedDeviceInfo.rack.id,
@@ -41,6 +36,8 @@
     }
   }
 </script>
+
+<EditPanelPower {selectedDeviceInfo} />
 
 <div class="actions">
   <button
@@ -71,11 +68,6 @@
     gap: var(--space-3);
   }
 
-  /*
-    Remove from Rack affects a single placement, so it gets a quieter
-    ghost-danger treatment: destructive red is retained, but it no longer
-    dominates the panel's primary editing controls.
-  */
   .btn-remove {
     align-self: flex-start;
     padding: var(--space-1-5) var(--space-3);
@@ -95,11 +87,6 @@
     background: var(--colour-error-bg);
   }
 
-  /*
-    Delete from Library removes the device type across every instance, a far
-    larger blast radius, so it keeps the loud full-width solid-danger styling
-    to read as the more serious action.
-  */
   .btn-delete-type {
     width: 100%;
     padding: var(--space-3) var(--space-4);
