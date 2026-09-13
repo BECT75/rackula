@@ -20,6 +20,7 @@ on:
       - svelte.config.*
       - tsconfig*.json
       - index.html
+      - .github/workflows/deploy-dev.yml
       # Skip docs-only deploys. The dir globs above match every file in a
       # directory, so a README inside api/, deploy/, etc. would otherwise
       # trigger a rebuild. This negation (evaluated after the positives) drops
@@ -151,8 +152,8 @@ jobs:
           install -m 600 /dev/null /opt/rackula/rackula-dev/.env
           cat > /opt/rackula/rackula-dev/.env << 'EOF'
           RACKULA_PORT=127.0.0.1:8081
-          RACKULA_IMAGE=ghcr.io/rackulalives/rackula:main
-          RACKULA_API_IMAGE=ghcr.io/rackulalives/rackula-api:main
+          RACKULA_IMAGE=ghcr.io/${{ github.repository }}:main
+          RACKULA_API_IMAGE=ghcr.io/${{ github.repository }}-api:main
           RACKULA_CONTAINER_NAME=rackula-dev
           RACKULA_API_CONTAINER_NAME=rackula-api-dev
           CORS_ORIGIN=https://d.racku.la
