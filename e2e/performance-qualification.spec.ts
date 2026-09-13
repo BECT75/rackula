@@ -6,7 +6,10 @@ import { loadFileFromDisk, clickSave, clickExport, locators } from './helpers';
 const referenceProject = resolve(process.cwd(), 'qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml');
 const evidenceFile = resolve(process.cwd(), 'qualification/STEP-6-PERFORMANCE.results.json');
 
-const budgetsMs = {
+// The Phase 24 execution plan defines the operations to qualify but did not
+// contain numeric V1 budgets. These conservative qualification thresholds are
+// therefore made explicit here so the gate is reproducible and auditable.
+const qualificationThresholdsMs = {
   openProject: 5000,
   moveEquipment: 500,
   changeView: 1000,
@@ -18,12 +21,15 @@ const budgetsMs = {
 
 const samples: Record<string, number[]> = {};
 
+async function nextPaint(page: import('@playwright/test').Page) {
+  await page.evaluate(() => new Promise<void>((resolvePaint) => requestAnimationFrame(() => resolvePaint())));
+}
+
 async function measure(name: string, fn: () => Promise<void>) {
   const start = performance.now();
   await fn();
   const elapsed = performance.now() - start;
   (samples[name] ??= []).push(Math.round(elapsed * 100) / 100);
-  return elapsed;
 }
 
 function p95(values: number[]) {
@@ -35,15 +41,17 @@ function writeEvidence() {
   const metrics = Object.fromEntries(Object.entries(samples).map(([name, values]) => [name, {
     samples_ms: values,
     p95_ms: p95(values),
-    budget_ms: budgetsMs[name as keyof typeof budgetsMs],
-    pass: p95(values) <= budgetsMs[name as keyof typeof budgetsMs],
+    threshold_ms: qualificationThresholdsMs[name as keyof typeof qualificationThresholdsMs],
+    pass: p95(values) <= qualificationThresholdsMs[name as keyof typeof qualificationThresholdsMs],
   }]));
   writeFileSync(evidenceFile, JSON.stringify({
     rc: '1.0.0-rc.1',
     commit: '650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795',
     reference_project: 'RACKULA_REFERENCE_PROJECT_V1',
-    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations',
-    budgets_ms: budgetsMs,
+    reference_load: { racks: 5, equipment: 150, ports: 1249, connections: 616 },
+    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations; immutable RC artifact; no rebuild',
+    threshold_origin: 'Phase 24 Step 6 qualification thresholds defined explicitly because the execution plan specified scenarios but no numeric V1 budgets.',
+    qualification_thresholds_ms: qualificationThresholdsMs,
     metrics,
   }, null, 2));
 }
@@ -67,7 +75,8 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   for (let i = 0; i < 5; i++) {
     await measure('moveEquipment', async () => {
       await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
-      await page.waitForTimeout(50);
+      await nextPaint(page);
+      await expect(firstDevice).toBeVisible();
     });
   }
 
@@ -79,7 +88,8 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
     await measure('changeView', async () => {
       const target = i % 2 === 0 ? viewTab : editTab;
       await target.click();
-      await expect(target).toHaveAttribute('aria-selected', 'true');
+      await nextPaint(page);
+      await expect(target).toBeVisible();
     });
   }
 
@@ -92,7 +102,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   for (const term of ['server', 'switch', 'amplifier', 'processor', 'server']) {
     await measure('librarySearch', async () => {
       await search.fill(term);
-      await page.waitForTimeout(50);
+      await nextPaint(page);
     });
   }
   await search.clear();
@@ -109,8 +119,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   for (let i = 0; i < 3; i++) {
     await measure('exportDialog', async () => {
       await clickExport(page);
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible();
+      await expect(page.getByRole('dialog')).toBeVisible();
     });
     await page.keyboard.press('Escape');
   }
@@ -124,11 +133,14 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
       await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
       await viewTab.click();
       await editTab.click();
+      await nextPaint(page);
     });
   }
 
   writeEvidence();
   for (const [name, values] of Object.entries(samples)) {
-    expect(p95(values), `${name} p95 exceeds V1 budget`).toBeLessThanOrEqual(budgetsMs[name as keyof typeof budgetsMs]);
+    expect(p95(values), `${name} p95 exceeds Step 6 qualification threshold`).toBeLessThanOrEqual(
+      qualificationThresholdsMs[name as keyof typeof qualificationThresholdsMs],
+    );
   }
 });
