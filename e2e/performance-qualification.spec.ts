@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/base-test';
 import { resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
-import { loadFileFromDisk, clickSave, clickExport, locators } from './helpers';
+import { loadFileFromDisk, locators } from './helpers';
 
 const referenceProject = resolve(process.cwd(), 'qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml');
 const evidenceFile = resolve(process.cwd(), 'qualification/STEP-6-PERFORMANCE.results.json');
@@ -32,6 +32,15 @@ async function prepareReferenceState(page: import('@playwright/test').Page) {
   await expect(page.locator(locators.rack.device).first()).toBeVisible({ timeout: 15000 });
 }
 
+async function runPaletteCommand(page: import('@playwright/test').Page, actionId: string) {
+  await page.getByTestId('btn-command-palette').click();
+  const command = page.locator(
+    `[data-testid="command-palette-item-${actionId}"], [data-testid="command-palette-recent-item-${actionId}"]`,
+  ).first();
+  await expect(command).toBeVisible();
+  await command.click();
+}
+
 async function measure(name: string, fn: () => Promise<void>) {
   const start = performance.now();
   await fn();
@@ -56,7 +65,7 @@ function writeEvidence() {
     commit: '650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795',
     reference_project: 'RACKULA_REFERENCE_PROJECT_V1',
     reference_load: { racks: 5, equipment: 150, ports: 1249, connections: 616 },
-    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations; immutable RC artifact; no rebuild. Save/export samples are independently prepared outside the timed interval to avoid command-palette state carrying between samples.',
+    method: 'Chromium/Ubuntu GitHub Actions; p95 over repeated user-visible operations; immutable RC artifact; no rebuild. Save/export samples are independently prepared outside the timed interval; palette commands are resolved from either their normal or Recent projection.',
     threshold_origin: 'Phase 24 Step 6 qualification thresholds defined explicitly because the execution plan specified scenarios but no numeric V1 budgets.',
     qualification_thresholds_ms: qualificationThresholdsMs,
     metrics,
@@ -120,7 +129,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
     await prepareReferenceState(page);
     await measure('save', async () => {
       const downloadPromise = page.waitForEvent('download');
-      await clickSave(page);
+      await runPaletteCommand(page, 'export-backup');
       const download = await downloadPromise;
       await download.path();
     });
@@ -129,7 +138,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   for (let i = 0; i < 3; i++) {
     await prepareReferenceState(page);
     await measure('exportDialog', async () => {
-      await clickExport(page);
+      await runPaletteCommand(page, 'export');
       await expect(page.getByRole('dialog')).toBeVisible();
     });
   }
