@@ -247,7 +247,9 @@ describe(
       // Bits UI may retain the dialog subtree for transitions. What matters
       // here is that the guard is no longer open after the user resolves it.
       expect(
-        screen.queryByText(/Replace this layout\?/i)?.getAttribute("data-state"),
+        screen
+          .queryByText(/Replace this layout\?/i)
+          ?.getAttribute("data-state"),
       ).not.toBe("open");
     });
 
@@ -262,7 +264,9 @@ describe(
 
       await waitFor(() => {
         expect(
-          screen.queryByText(/Replace this layout\?/i)?.getAttribute("data-state"),
+          screen
+            .queryByText(/Replace this layout\?/i)
+            ?.getAttribute("data-state"),
         ).not.toBe("open");
       });
       expect(getLayoutStore().layout.name).toBe("Local Work In Progress");
