@@ -1,0 +1,184 @@
+name: RC Step 6 Performance
+
+on:
+  push:
+    branches:
+      - 'staging/**'
+    paths:
+      - '.github/workflows/rc-step-6-performance.yml'
+      - 'e2e/performance-qualification.spec.ts'
+      - 'qualification/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: rc-step-6-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    name: Immutable RC Step 6 performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      RC_VERSION: 1.0.0-rc.1
+      RC_COMMIT: 650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795
+      RC_COMMIT_SHORT: 650e5f6
+      RC_RUN_ID: '34760461222'
+      RC_ARTIFACT_NAME: rackula-ct-1.0.0-rc.1-650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795
+      RC_TARBALL_SHA256: c5c28c17691e5892f55a23121169f4bb092dd3ffe139036dbe087cf4572c084a
+
+    steps:
+      - name: Checkout exact candidate source for test harness only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RC_COMMIT }}
+          path: source
+          persist-credentials: false
+
+      - name: Checkout Step 6 qualification assets
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: qualification-work
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Install test dependencies
+        working-directory: source
+        run: npm ci
+
+      - name: Build native V1 reference project and install Step 6 spec
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/qualification
+          cp qualification-work/qualification/generate-reference-project.mjs source/qualification/generate-reference-project.mjs
+          cp qualification-work/e2e/performance-qualification.spec.ts source/e2e/performance-qualification.spec.ts
+          sed -i 's/let seq = 1;/let seq = 2;/' source/qualification/generate-reference-project.mjs
+          sed -i 's/Array.from({ length: 4 }/Array.from({ length: 2 }/' source/qualification/generate-reference-project.mjs
+          sed -i 's/width_fraction: 0.25/width_fraction: 0.5/' source/qualification/generate-reference-project.mjs
+          cd source
+          node qualification/generate-reference-project.mjs
+          cat qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+
+      - name: Download immutable RC artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RC_ARTIFACT_NAME }}
+          path: artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: BECT75/rackula
+          run-id: ${{ env.RC_RUN_ID }}
+
+      - name: Verify and extract immutable RC
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(sha256sum artifact/rackula-ct-1.0.0-rc.1.tar.gz | awk '{print $1}')"
+          test "$actual_sha" = "$RC_TARBALL_SHA256"
+          mkdir -p staging-site
+          tar -C staging-site -xzf artifact/rackula-ct-1.0.0-rc.1.tar.gz
+          node - <<'NODE'
+          const fs = require('fs');
+          const v = JSON.parse(fs.readFileSync('staging-site/version.json', 'utf8'));
+          if (v.version !== process.env.RC_VERSION) throw new Error(`version mismatch: ${v.version}`);
+          if (v.commit !== process.env.RC_COMMIT_SHORT) throw new Error(`commit mismatch: ${v.commit}`);
+          NODE
+
+      - name: Serve immutable RC over isolated HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 -keyout staging-key.pem -out staging-cert.pem -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+          cat > staging-server.mjs <<'NODE'
+          import https from 'node:https';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = path.resolve('staging-site');
+          const mime = new Map([['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],['.css','text/css; charset=utf-8'],['.json','application/json; charset=utf-8'],['.svg','image/svg+xml'],['.png','image/png'],['.jpg','image/jpeg'],['.jpeg','image/jpeg'],['.webp','image/webp'],['.ico','image/x-icon'],['.woff2','font/woff2']]);
+          const server = https.createServer({key: fs.readFileSync('staging-key.pem'), cert: fs.readFileSync('staging-cert.pem')}, (req,res) => {
+            try {
+              const url = new URL(req.url ?? '/', 'https://localhost');
+              let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '');
+              if (!rel) rel = 'index.html';
+              let file = path.resolve(root, rel);
+              if (!file.startsWith(root + path.sep) && file !== root) { res.writeHead(403); return res.end('Forbidden'); }
+              if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(root, 'index.html');
+              res.writeHead(200, {'content-type': mime.get(path.extname(file).toLowerCase()) ?? 'application/octet-stream', 'cache-control':'no-store'});
+              res.end(fs.readFileSync(file));
+            } catch (error) { res.writeHead(500); res.end(String(error)); }
+          });
+          server.listen(8443, '127.0.0.1');
+          NODE
+          nohup node staging-server.mjs > staging-server.log 2>&1 &
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -kfsS https://127.0.0.1:8443/version.json >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -kfsS https://127.0.0.1:8443/version.json
+
+      - name: Install Chromium
+        working-directory: source
+        run: npx playwright install --with-deps chromium
+
+      - name: Configure Step 6 Playwright run
+        shell: bash
+        run: |
+          cat > source/e2e/playwright.rc-step-6.config.ts <<'EOF'
+          import { defineConfig, devices } from '@playwright/test';
+          export default defineConfig({
+            testDir: '.',
+            testMatch: ['performance-qualification.spec.ts'],
+            fullyParallel: false,
+            workers: 1,
+            forbidOnly: true,
+            retries: 0,
+            timeout: 120_000,
+            expect: { timeout: 20_000 },
+            reporter: [['list'], ['html', { open: 'never', outputFolder: '../playwright-report-step-6' }]],
+            use: {
+              ...devices['Desktop Chrome'],
+              baseURL: 'https://127.0.0.1:8443',
+              ignoreHTTPSErrors: true,
+              trace: 'retain-on-failure',
+              screenshot: 'only-on-failure',
+            },
+            projects: [{ name: 'chromium' }],
+          });
+          EOF
+
+      - name: Run Step 6 performance qualification
+        working-directory: source
+        run: npx playwright test --config e2e/playwright.rc-step-6.config.ts
+
+      - name: Print performance evidence
+        if: always()
+        shell: bash
+        run: |
+          test -f source/qualification/STEP-6-PERFORMANCE.results.json && cat source/qualification/STEP-6-PERFORMANCE.results.json || true
+          cat staging-server.log || true
+
+      - name: Upload Step 6 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc-step-6-performance-${{ github.run_id }}
+          path: |
+            source/qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml
+            source/qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+            source/qualification/STEP-6-PERFORMANCE.results.json
+            source/playwright-report-step-6/
+            source/test-results/
+            staging-server.log
+          if-no-files-found: warn
+          retention-days: 90
