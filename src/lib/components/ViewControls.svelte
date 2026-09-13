@@ -3,17 +3,13 @@
 
   The body of the side panel's View tab (#2078): the layout-scoped view toggles
   that are always reachable regardless of selection. Display mode, annotations,
-  and rear view. Theme is an app preference and lives behind the Settings gear,
-  not here.
-
-  These controls mirror existing store state rather than forking a second source
-  of truth. Display mode is the same state as the canvas lens (#2074) and the
-  palette toggle (#2094); rear view is the active rack's per-rack show_rear, the
-  same field the Edit tab's rack section edits.
+  rear view, and the RACKULA CT side elevation are all projections of the same
+  layout state.
 -->
 <script lang="ts">
   import SegmentedControl from "./SegmentedControl.svelte";
   import Switch from "./Switch.svelte";
+  import RackSideView from "./RackSideView.svelte";
   import { getLayoutStore } from "$lib/stores/layout.svelte";
   import { getUIStore } from "$lib/stores/ui.svelte";
   import type { DisplayMode } from "$lib/types";
@@ -27,8 +23,6 @@
     { value: "image-label", label: "Image + Label" },
   ];
 
-  // The active rack scopes the per-rack rear-view toggle. With no rack the
-  // control is disabled rather than hidden, so the View tab stays stable.
   const activeRack = $derived(layoutStore.activeRack);
 
   function handleDisplayModeChange(mode: DisplayMode) {
@@ -42,9 +36,6 @@
     uiStore.setAnnotations(enabled);
   }
 
-  // Rear view is per-rack. Bayed racks share one physical front/rear view, so a
-  // change fans out to every rack in the bay to keep it consistent. Row groups
-  // are independent racks, so only the active rack changes.
   function handleRearViewChange(value: string) {
     const rack = activeRack;
     if (!rack) return;
@@ -95,6 +86,19 @@
     />
     {#if !activeRack}
       <p class="control-helper">Add a rack to control its rear view.</p>
+    {/if}
+  </section>
+
+  <section class="control-group" data-testid="ct-side-elevation-section">
+    <h3 class="control-label">Side Elevation</h3>
+    <p class="control-helper">
+      Rack depth, rails and equipment implantation. This projection follows the
+      same positions used by the front and rear views.
+    </p>
+    {#if activeRack}
+      <RackSideView rack={activeRack} deviceLibrary={layoutStore.device_types} />
+    {:else}
+      <p class="control-helper">Add a rack to display its side elevation.</p>
     {/if}
   </section>
 </div>
