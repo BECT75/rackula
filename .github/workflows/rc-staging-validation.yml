@@ -64,6 +64,7 @@ jobs:
           mkdir -p source/qualification
           cp qualification-work/qualification/generate-reference-project.mjs source/qualification/generate-reference-project.mjs
           cp qualification-work/e2e/reference-project-staging.spec.ts source/e2e/reference-project-staging.spec.ts
+          sed -i 's/let seq = 1;/let seq = 2;/' source/qualification/generate-reference-project.mjs
           cd source
           node qualification/generate-reference-project.mjs
           test -f qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml
