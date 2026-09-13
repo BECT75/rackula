@@ -95,12 +95,22 @@ test.describe("Persistence", () => {
     browser,
   }) => {
     await gotoWithRack(page, STANDARD_RACK_SHARE);
-    await dragDeviceToRack(page);
-    await expect(page.locator(locators.rack.device).first()).toBeVisible({
-      timeout: 5000,
-    });
 
-    const sourceDeviceCount = await page.locator(locators.rack.device).count();
+    // Use a shelf as the reference equipment so the backup/restore proof covers
+    // the non-rackable-equipment support case without introducing placement
+    // collisions from an unrelated device already occupying the target U.
+    const searchInput = page.locator('[data-testid="search-devices"]');
+    await searchInput.fill("shelf");
+    await dragDeviceToRack(page, { deviceName: "Shelf" });
+
+    const sourceDevices = page.locator(locators.rack.device);
+    await expect(sourceDevices.first()).toBeVisible({ timeout: 5000 });
+    await expect(sourceDevices.first()).toHaveAttribute(
+      "aria-label",
+      /,\s*\d+U shelf\b/i,
+    );
+
+    const sourceRenderedDeviceCount = await sourceDevices.count();
     const downloadPromise = page.waitForEvent("download");
     await clickSave(page);
     const download = await downloadPromise;
@@ -152,20 +162,18 @@ test.describe("Persistence", () => {
         timeout: 10000,
       });
 
-      await expect(
-        freshPage.locator(locators.rack.container).first(),
-      ).toBeVisible();
-      await expect(
-        freshPage.locator(locators.rack.device).first(),
-      ).toBeVisible();
+      const restoredDevices = freshPage.locator(locators.rack.device);
+      await expect(restoredDevices.first()).toBeVisible();
+      await expect(restoredDevices.first()).toHaveAttribute(
+        "aria-label",
+        /,\s*\d+U shelf\b/i,
+      );
 
-      const restoredDeviceCount = await freshPage
-        .locator(locators.rack.device)
-        .count();
+      const restoredRenderedDeviceCount = await restoredDevices.count();
       const restoredRackViewCount = await freshPage
         .locator(locators.rack.container)
         .count();
-      expect(restoredDeviceCount).toBe(sourceDeviceCount);
+      expect(restoredRenderedDeviceCount).toBe(sourceRenderedDeviceCount);
       expect(restoredRackViewCount).toBe(2);
 
       await test.info().attach("backup-restore-evidence", {
@@ -176,9 +184,10 @@ test.describe("Persistence", () => {
               backup_size_bytes: backupStat.size,
               backup_mtime_utc: backupStat.mtime.toISOString(),
               backup_sha256: backupSha256,
-              source_device_count: sourceDeviceCount,
-              restored_device_count: restoredDeviceCount,
+              source_rendered_device_count: sourceRenderedDeviceCount,
+              restored_rendered_device_count: restoredRenderedDeviceCount,
               restored_rack_view_count: restoredRackViewCount,
+              shelf_restored: true,
               clean_context_origin_count_before_navigation:
                 stateBeforeNavigation.origins.length,
             },
