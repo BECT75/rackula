@@ -48,9 +48,14 @@ export interface RackCatalogModel {
 
 const LEGRAND_SLIM5_BASE_URL =
   "https://www.legrandav.com/products/racks/floor_standing/slim_5_rack_frame";
-const STARTECH_FR_BASE_URL = "https://www.startech.com/fr-fr/gestion-de-serveurs";
+const STARTECH_FR_BASE_URL =
+  "https://www.startech.com/fr-fr/gestion-de-serveurs";
 
 const INCH_TO_MM = 25.4;
+
+function inchesToMillimetres(inches: number): number {
+  return Number((inches * INCH_TO_MM).toFixed(3));
+}
 
 function slim5(
   partNumber: string,
@@ -68,7 +73,7 @@ function slim5(
     mounting_width_in: 19,
     outside_width_in: 19.125,
     depth_in: depthIn,
-    depth_mm: depthIn * INCH_TO_MM,
+    depth_mm: inchesToMillimetres(depthIn),
     frame_type: "open-frame",
     mounting_style: "floor",
     form_factor: "open-frame",
@@ -95,12 +100,12 @@ function startechWalloa(
     // Rackula uses the maximum mounting depth as the default modeled depth so
     // equipment fit checks never assume less clearance than the rack can provide.
     depth_in: maxDepthIn,
-    depth_mm: maxDepthIn * INCH_TO_MM,
+    depth_mm: inchesToMillimetres(maxDepthIn),
     adjustable_depth: {
       min_in: minDepthIn,
       max_in: maxDepthIn,
-      min_mm: minDepthIn * INCH_TO_MM,
-      max_mm: maxDepthIn * INCH_TO_MM,
+      min_mm: inchesToMillimetres(minDepthIn),
+      max_mm: inchesToMillimetres(maxDepthIn),
     },
     rack_type: "2-post",
     frame_type: "open-frame",
