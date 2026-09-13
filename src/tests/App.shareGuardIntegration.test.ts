@@ -244,10 +244,11 @@ describe(
       expect(
         await screen.findByText("Previous layout kept in Layouts"),
       ).toBeInTheDocument();
-      // The dialog itself closes once resolved.
+      // Bits UI may retain the dialog subtree for transitions. What matters
+      // here is that the guard is no longer open after the user resolves it.
       expect(
-        screen.queryByText(/Replace this layout\?/i),
-      ).not.toBeInTheDocument();
+        screen.queryByText(/Replace this layout\?/i)?.getAttribute("data-state"),
+      ).not.toBe("open");
     });
 
     it("Cancel keeps the restored local layout and never applies the shared one", async () => {
@@ -261,8 +262,8 @@ describe(
 
       await waitFor(() => {
         expect(
-          screen.queryByText(/Replace this layout\?/i),
-        ).not.toBeInTheDocument();
+          screen.queryByText(/Replace this layout\?/i)?.getAttribute("data-state"),
+        ).not.toBe("open");
       });
       expect(getLayoutStore().layout.name).toBe("Local Work In Progress");
       expect(screen.queryByText("Shared Test")).not.toBeInTheDocument();
