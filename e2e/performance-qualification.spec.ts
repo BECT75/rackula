@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/base-test';
 import { resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
-import { loadFileFromDisk, clickSave, clickExport, locators } from './helpers';
+import { loadFileFromDisk, locators } from './helpers';
 
 const referenceProject = resolve(process.cwd(), 'qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml');
 const evidenceFile = resolve(process.cwd(), 'qualification/STEP-6-PERFORMANCE.results.json');
@@ -23,6 +23,15 @@ const samples: Record<string, number[]> = {};
 
 async function nextPaint(page: import('@playwright/test').Page) {
   await page.evaluate(() => new Promise<void>((resolvePaint) => requestAnimationFrame(() => resolvePaint())));
+}
+
+async function runPaletteCommandStable(page: import('@playwright/test').Page, actionId: string) {
+  const item = page.getByTestId(`command-palette-item-${actionId}`);
+  if (!(await item.isVisible())) {
+    await page.getByTestId('btn-command-palette').click();
+  }
+  await expect(item).toBeVisible();
+  await item.click();
 }
 
 async function measure(name: string, fn: () => Promise<void>) {
@@ -112,7 +121,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   for (let i = 0; i < 3; i++) {
     await measure('save', async () => {
       const downloadPromise = page.waitForEvent('download');
-      await clickSave(page);
+      await runPaletteCommandStable(page, 'export-backup');
       const download = await downloadPromise;
       await download.path();
     });
@@ -120,7 +129,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
 
   for (let i = 0; i < 3; i++) {
     await measure('exportDialog', async () => {
-      await clickExport(page);
+      await runPaletteCommandStable(page, 'export');
       await expect(page.getByRole('dialog')).toBeVisible();
     });
     await page.keyboard.press('Escape');
