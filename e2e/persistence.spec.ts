@@ -133,7 +133,9 @@ test.describe("Persistence", () => {
         .waitFor({ state: "visible" });
 
       await loadFileFromDisk(freshPage, savedPath);
-      await expect(freshPage.locator(locators.toast.success).last()).toBeVisible({
+      await expect(
+        freshPage.locator(locators.toast.success).last(),
+      ).toBeVisible({
         timeout: 10000,
       });
 
