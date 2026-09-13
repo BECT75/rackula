@@ -123,6 +123,8 @@ describe("Step 5 backup / restore integrity", () => {
     expect(restoredLayout.settings).toEqual(sourceLayout.settings);
     expect(restoredLayout.ct_project).toEqual(sourceLayout.ct_project);
 
+    // Exact rack cardinality is an acceptance invariant for this reference fixture.
+    // eslint-disable-next-line no-restricted-syntax -- Step 5 must detect an extra or missing rack after restore.
     expect(restoredLayout.racks).toHaveLength(1);
     expect(restoredLayout.racks[0]?.id).toBe("rack-main");
     expect(restoredLayout.racks[0]?.depth_mm).toBe(800);
