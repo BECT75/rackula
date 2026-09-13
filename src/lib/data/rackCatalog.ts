@@ -100,8 +100,8 @@ function startechWalloa(
     adjustable_depth: {
       min_in: minDepthIn,
       max_in: maxDepthIn,
-      min_mm: minDepthIn * INCH_TO_MM,
-      max_mm: maxDepthIn * INCH_TO_MM,
+      min_mm: Number((minDepthIn * INCH_TO_MM).toFixed(1)),
+      max_mm: Number((maxDepthIn * INCH_TO_MM).toFixed(1)),
     },
     rack_type: "2-post",
     frame_type: "open-frame",
