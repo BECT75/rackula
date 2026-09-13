@@ -305,8 +305,10 @@ describe("App cleanup prompt flow", { retry: 2, timeout: 30000 }, () => {
     expect(
       await screen.findByRole("dialog", { name: "Clean Up Device Library" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("dialog", { name: "Settings" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Settings" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
