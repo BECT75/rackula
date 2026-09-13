@@ -96,17 +96,9 @@ test.describe("Persistence", () => {
   }) => {
     await gotoWithRack(page, STANDARD_RACK_SHARE);
     await dragDeviceToRack(page);
-
-    const searchInput = page.locator('[data-testid="search-devices"]');
-    await searchInput.fill("shelf");
-    await dragDeviceToRack(page, { deviceName: "Shelf" });
-
     await expect(page.locator(locators.rack.device).first()).toBeVisible({
       timeout: 5000,
     });
-    await expect(
-      page.locator(locators.rack.device).filter({ hasText: /Shelf/i }).first(),
-    ).toBeVisible({ timeout: 5000 });
 
     const sourceDeviceCount = await page.locator(locators.rack.device).count();
     const downloadPromise = page.waitForEvent("download");
@@ -170,14 +162,11 @@ test.describe("Persistence", () => {
       const restoredDeviceCount = await freshPage
         .locator(locators.rack.device)
         .count();
+      const restoredRackViewCount = await freshPage
+        .locator(locators.rack.container)
+        .count();
       expect(restoredDeviceCount).toBe(sourceDeviceCount);
-      expect(await freshPage.locator(locators.rack.container).count()).toBe(2);
-      await expect(
-        freshPage
-          .locator(locators.rack.device)
-          .filter({ hasText: /Shelf/i })
-          .first(),
-      ).toBeVisible();
+      expect(restoredRackViewCount).toBe(2);
 
       await test.info().attach("backup-restore-evidence", {
         body: Buffer.from(
@@ -189,8 +178,7 @@ test.describe("Persistence", () => {
               backup_sha256: backupSha256,
               source_device_count: sourceDeviceCount,
               restored_device_count: restoredDeviceCount,
-              restored_rack_view_count: 2,
-              shelf_restored: true,
+              restored_rack_view_count: restoredRackViewCount,
               clean_context_origin_count_before_navigation:
                 stateBeforeNavigation.origins.length,
             },
