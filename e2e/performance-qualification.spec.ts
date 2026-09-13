@@ -97,15 +97,17 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   await devicesTab.click();
   const palette = page.locator(locators.device.palette);
   await expect(palette).toBeVisible();
-  const search = palette.getByRole('textbox').first();
+  const search = page.getByTestId('search-devices');
   await expect(search).toBeVisible();
   for (const term of ['server', 'switch', 'amplifier', 'processor', 'server']) {
     await measure('librarySearch', async () => {
       await search.fill(term);
+      await page.waitForTimeout(175);
       await nextPaint(page);
     });
   }
   await search.clear();
+  await page.waitForTimeout(175);
 
   for (let i = 0; i < 3; i++) {
     await measure('save', async () => {
@@ -128,7 +130,9 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
     await measure('representativeManipulation', async () => {
       await devicesTab.click();
       await search.fill('switch');
+      await page.waitForTimeout(175);
       await search.clear();
+      await page.waitForTimeout(175);
       await firstDevice.focus();
       await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
       await viewTab.click();
