@@ -6,6 +6,8 @@ on:
       - 'staging/**'
     paths:
       - '.github/workflows/rc-staging-validation.yml'
+      - 'qualification/**'
+      - 'e2e/reference-project-staging.spec.ts'
   workflow_dispatch:
 
 permissions:
@@ -20,7 +22,7 @@ jobs:
   staging-smoke:
     name: Immutable RC staging smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       RC_VERSION: 1.0.0-rc.1
       RC_COMMIT: 650e5f6ddc844b02e8f6a91414a1a7e5f8fa1795
@@ -37,6 +39,13 @@ jobs:
           path: source
           persist-credentials: false
 
+      - name: Checkout staging qualification assets
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: qualification-work
+          persist-credentials: false
+
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
@@ -48,7 +57,20 @@ jobs:
         working-directory: source
         run: npm ci
 
-      - name: Download immutable RC artifact from the successful RC build
+      - name: Build native V1 reference project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/qualification
+          cp qualification-work/qualification/generate-reference-project.mjs source/qualification/generate-reference-project.mjs
+          cp qualification-work/e2e/reference-project-staging.spec.ts source/e2e/reference-project-staging.spec.ts
+          cd source
+          node qualification/generate-reference-project.mjs
+          test -f qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml
+          test -f qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+          cat qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+
+      - name: Download immutable RC artifact from successful RC build
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.RC_ARTIFACT_NAME }}
@@ -95,7 +117,6 @@ jobs:
           import https from 'node:https';
           import fs from 'node:fs';
           import path from 'node:path';
-          import { fileURLToPath } from 'node:url';
 
           const root = path.resolve('staging-site');
           const mime = new Map([
@@ -148,7 +169,7 @@ jobs:
           nohup node staging-server.mjs > staging-server.log 2>&1 &
           echo $! > staging-server.pid
 
-      - name: Verify HTTPS, headers, version and static storage
+      - name: Verify HTTPS headers version and static storage
         shell: bash
         run: |
           set -euo pipefail
@@ -171,7 +192,7 @@ jobs:
         working-directory: source
         run: npx playwright install --with-deps chromium
 
-      - name: Configure smoke tests against the immutable staging artifact
+      - name: Configure smoke and reference-project tests
         shell: bash
         run: |
           cat > source/e2e/playwright.rc-staging.config.ts <<'EOF'
@@ -179,13 +200,18 @@ jobs:
 
           export default defineConfig({
             testDir: '.',
-            testMatch: ['deploy-smoke.spec.ts', 'basic-workflow.spec.ts', 'persistence.spec.ts'],
+            testMatch: [
+              'deploy-smoke.spec.ts',
+              'basic-workflow.spec.ts',
+              'persistence.spec.ts',
+              'reference-project-staging.spec.ts',
+            ],
             fullyParallel: false,
             workers: 1,
             forbidOnly: true,
             retries: 1,
-            timeout: 60_000,
-            expect: { timeout: 15_000 },
+            timeout: 90_000,
+            expect: { timeout: 20_000 },
             reporter: [['list'], ['html', { open: 'never', outputFolder: '../playwright-report-rc-staging' }]],
             use: {
               ...devices['Desktop Chrome'],
@@ -198,7 +224,7 @@ jobs:
           });
           EOF
 
-      - name: Run immutable-artifact smoke, library and persistence checks
+      - name: Run immutable-artifact smoke persistence and reference-project load
         working-directory: source
         env:
           EXPECT_VERSION: 1.0.0-rc.1
@@ -218,12 +244,13 @@ jobs:
             echo "RC_TARBALL_SHA256=$RC_TARBALL_SHA256"
             echo "STAGING_MODE=isolated-github-actions-https"
             echo "REBUILD_PERFORMED=false"
-            echo "REFERENCE_PROJECT=not-yet-loaded"
+            echo "REFERENCE_PROJECT=RACKULA_REFERENCE_PROJECT_V1"
+            echo "REFERENCE_PROJECT_FILE=source/qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml"
             echo "APPLICATION_LOG=staging-server.log"
           } > staging-evidence.txt
           cat staging-server.log || true
 
-      - name: Upload staging evidence
+      - name: Upload staging evidence and golden candidate
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -231,6 +258,8 @@ jobs:
           path: |
             staging-evidence.txt
             staging-server.log
+            source/qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml
+            source/qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
             source/playwright-report-rc-staging/
             source/test-results/
           if-no-files-found: warn
