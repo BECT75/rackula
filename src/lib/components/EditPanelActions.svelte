@@ -8,6 +8,7 @@
   import { getSelectionStore } from "$lib/stores/selection.svelte";
   import { getToastStore } from "$lib/stores/toast.svelte";
   import { isCustomDevice } from "$lib/utils/device-lookup";
+  import { clearAssignmentsForPdu } from "$lib/utils/power-assignment";
   import type { SelectedDeviceInfo } from "$lib/types";
 
   interface Props {
@@ -26,6 +27,14 @@
   );
 
   function handleRemoveDevice() {
+    const clearedAssignments = clearAssignmentsForPdu(
+      layoutStore.racks,
+      selectedDeviceInfo.placedDevice.id,
+    );
+    if (clearedAssignments > 0) {
+      layoutStore.markDirty();
+    }
+
     const name = layoutStore.removeDeviceFromRack(
       selectedDeviceInfo.rack.id,
       selectedDeviceInfo.deviceIndex,
