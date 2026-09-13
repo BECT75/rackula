@@ -1,0 +1,57 @@
+name: RC Build
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-rc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Build frontend
+        env:
+          VITE_ENV: production
+        run: npm run build
+
+      - name: Verify embedded version
+        run: |
+          test -f dist/version.json
+          grep -q '"version": "1.0.0-rc.2"' dist/version.json
+
+      - name: Package immutable RC artifact
+        run: |
+          tar -C dist -czf rackula-ct-1.0.0-rc.2.tar.gz .
+          sha256sum rackula-ct-1.0.0-rc.2.tar.gz > rackula-ct-1.0.0-rc.2.sha256
+          cat rackula-ct-1.0.0-rc.2.sha256
+
+      - name: Upload RC artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rackula-ct-1.0.0-rc.2-${{ github.sha }}
+          path: |
+            rackula-ct-1.0.0-rc.2.tar.gz
+            rackula-ct-1.0.0-rc.2.sha256
+            dist/version.json
+          if-no-files-found: error
+          retention-days: 90
