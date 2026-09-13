@@ -71,7 +71,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
   }
 
   const firstDevice = page.locator(locators.rack.device).first();
-  await firstDevice.click();
+  await firstDevice.focus();
   for (let i = 0; i < 5; i++) {
     await measure('moveEquipment', async () => {
       await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
@@ -129,7 +129,7 @@ test('Phase 24 step 6 - V1 performance gate on 5 racks / 150 equipment', async (
       await devicesTab.click();
       await search.fill('switch');
       await search.clear();
-      await firstDevice.click();
+      await firstDevice.focus();
       await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
       await viewTab.click();
       await editTab.click();
