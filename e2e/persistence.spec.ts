@@ -96,9 +96,17 @@ test.describe("Persistence", () => {
   }) => {
     await gotoWithRack(page, STANDARD_RACK_SHARE);
     await dragDeviceToRack(page);
+
+    const searchInput = page.locator('[data-testid="search-devices"]');
+    await searchInput.fill("shelf");
+    await dragDeviceToRack(page, { deviceName: "Shelf" });
+
     await expect(page.locator(locators.rack.device).first()).toBeVisible({
       timeout: 5000,
     });
+    await expect(
+      page.locator(locators.rack.device).filter({ hasText: /Shelf/i }).first(),
+    ).toBeVisible({ timeout: 5000 });
 
     const sourceDeviceCount = await page.locator(locators.rack.device).count();
     const downloadPromise = page.waitForEvent("download");
@@ -108,6 +116,19 @@ test.describe("Persistence", () => {
       .info()
       .outputPath("clean-context-backup.rackula.yaml");
     await download.saveAs(savedPath);
+
+    const fs = await import("fs/promises");
+    const crypto = await import("crypto");
+    const backupBytes = await fs.readFile(savedPath);
+    const backupStat = await fs.stat(savedPath);
+    const backupSha256 = crypto
+      .createHash("sha256")
+      .update(backupBytes)
+      .digest("hex");
+
+    expect(backupStat.size).toBeGreaterThan(0);
+    expect(Number.isNaN(backupStat.mtime.getTime())).toBe(false);
+    expect(backupSha256).toMatch(/^[a-f0-9]{64}$/);
 
     const baseUrl = new URL(page.url()).origin;
     const freshContext = await browser.newContext();
@@ -145,9 +166,40 @@ test.describe("Persistence", () => {
       await expect(
         freshPage.locator(locators.rack.device).first(),
       ).toBeVisible();
-      expect(await freshPage.locator(locators.rack.device).count()).toBe(
-        sourceDeviceCount,
-      );
+
+      const restoredDeviceCount = await freshPage
+        .locator(locators.rack.device)
+        .count();
+      expect(restoredDeviceCount).toBe(sourceDeviceCount);
+      expect(await freshPage.locator(locators.rack.container).count()).toBe(2);
+      await expect(
+        freshPage
+          .locator(locators.rack.device)
+          .filter({ hasText: /Shelf/i })
+          .first(),
+      ).toBeVisible();
+
+      await test.info().attach("backup-restore-evidence", {
+        body: Buffer.from(
+          JSON.stringify(
+            {
+              backup_file: download.suggestedFilename(),
+              backup_size_bytes: backupStat.size,
+              backup_mtime_utc: backupStat.mtime.toISOString(),
+              backup_sha256: backupSha256,
+              source_device_count: sourceDeviceCount,
+              restored_device_count: restoredDeviceCount,
+              restored_rack_view_count: 2,
+              shelf_restored: true,
+              clean_context_origin_count_before_navigation:
+                stateBeforeNavigation.origins.length,
+            },
+            null,
+            2,
+          ),
+        ),
+        contentType: "application/json",
+      });
     } finally {
       await freshContext.close();
     }
