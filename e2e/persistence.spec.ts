@@ -137,8 +137,12 @@ test.describe("Persistence", () => {
         timeout: 10000,
       });
 
-      await expect(freshPage.locator(locators.rack.container).first()).toBeVisible();
-      await expect(freshPage.locator(locators.rack.device).first()).toBeVisible();
+      await expect(
+        freshPage.locator(locators.rack.container).first(),
+      ).toBeVisible();
+      await expect(
+        freshPage.locator(locators.rack.device).first(),
+      ).toBeVisible();
       expect(await freshPage.locator(locators.rack.device).count()).toBe(
         sourceDeviceCount,
       );
