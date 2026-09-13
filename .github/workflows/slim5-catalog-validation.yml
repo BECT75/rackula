@@ -1,0 +1,36 @@
+name: Slim 5 Rack Catalog Validation
+
+on:
+  push:
+    branches:
+      - 'feature/legrand-slim5-rack-catalog'
+    paths:
+      - 'src/lib/data/rackCatalog.ts'
+      - 'src/tests/rackCatalog.test.ts'
+      - '.github/workflows/slim5-catalog-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Slim 5 catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type and Svelte checks
+        run: npm run check
+      - name: Catalog unit tests
+        run: npm run test:run -- src/tests/rackCatalog.test.ts
+      - name: Production build
+        run: npm run build
