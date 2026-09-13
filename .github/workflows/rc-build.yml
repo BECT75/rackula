@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security audit
+        run: npm audit --audit-level=high
+
       - name: Type check
         run: npm run check
 
@@ -37,21 +40,21 @@ jobs:
       - name: Verify embedded version
         run: |
           test -f dist/version.json
-          grep -q '"version": "1.0.0-rc.2"' dist/version.json
+          grep -q '"version": "1.0.0-rc.3"' dist/version.json
 
       - name: Package immutable RC artifact
         run: |
-          tar -C dist -czf rackula-ct-1.0.0-rc.2.tar.gz .
-          sha256sum rackula-ct-1.0.0-rc.2.tar.gz > rackula-ct-1.0.0-rc.2.sha256
-          cat rackula-ct-1.0.0-rc.2.sha256
+          tar -C dist -czf rackula-ct-1.0.0-rc.3.tar.gz .
+          sha256sum rackula-ct-1.0.0-rc.3.tar.gz > rackula-ct-1.0.0-rc.3.sha256
+          cat rackula-ct-1.0.0-rc.3.sha256
 
       - name: Upload RC artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rackula-ct-1.0.0-rc.2-${{ github.sha }}
+          name: rackula-ct-1.0.0-rc.3-${{ github.sha }}
           path: |
-            rackula-ct-1.0.0-rc.2.tar.gz
-            rackula-ct-1.0.0-rc.2.sha256
+            rackula-ct-1.0.0-rc.3.tar.gz
+            rackula-ct-1.0.0-rc.3.sha256
             dist/version.json
           if-no-files-found: error
           retention-days: 90
