@@ -27,12 +27,6 @@ const samples: MetricSamples = {
   representativeManipulation: [],
 };
 
-async function nextPaint(page: import('@playwright/test').Page) {
-  await page.evaluate(
-    () => new Promise<void>((resolvePaint) => requestAnimationFrame(() => resolvePaint())),
-  );
-}
-
 async function prepareReferenceState(page: import('@playwright/test').Page) {
   await page.reload();
   await loadFileFromDisk(page, referenceProject);
@@ -42,12 +36,6 @@ async function prepareReferenceState(page: import('@playwright/test').Page) {
   await expect(page.locator(locators.rack.device).first()).toBeVisible({
     timeout: 20_000,
   });
-}
-
-async function timed(operation: () => Promise<void>) {
-  const start = performance.now();
-  await operation();
-  return Math.round((performance.now() - start) * 100) / 100;
 }
 
 function percentile(values: number[], percentileValue: number) {
@@ -100,6 +88,10 @@ function writeEvidence() {
           sample_count: sampleCount,
           warmup_count: warmupCount,
           statistic: 'p50 and nearest-rank p95',
+          clock: 'window.performance.now() in the browser process',
+          settlement: 'DOM events plus render frames; search debounce is included',
+          excluded_overhead:
+            'Playwright controller transport, locator actionability polling and assertion round-trips',
           note: 'Maintenance reference on a pinned GitHub-hosted Windows runner; this is a reproducible technical reference and is not represented as physical pilot hardware.',
         },
         thresholds_ms: thresholdsMs,
@@ -127,51 +119,112 @@ test('Step 17 - requalify the two accepted Step 6 P2 deviations', async ({ page 
 
   const firstDevice = page.locator(locators.rack.device).first();
   await expect(firstDevice).toBeVisible();
-  await firstDevice.focus();
+
+  const measureMove = async (iteration: number) =>
+    firstDevice.evaluate(
+      async (element, key) => {
+        const target = element as HTMLElement;
+        target.focus();
+        const start = performance.now();
+        target.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            code: key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await new Promise<void>((resolvePaint) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolvePaint())),
+        );
+        return Math.round((performance.now() - start) * 100) / 100;
+      },
+      iteration % 2 === 0 ? 'ArrowUp' : 'ArrowDown',
+    );
 
   for (let i = 0; i < warmupCount; i += 1) {
-    await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
-    await nextPaint(page);
+    await measureMove(i);
   }
 
   for (let i = 0; i < sampleCount; i += 1) {
-    samples.moveEquipment.push(
-      await timed(async () => {
-        await page.keyboard.press(i % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
-        await nextPaint(page);
-        await expect(firstDevice).toBeVisible();
-      }),
-    );
+    samples.moveEquipment.push(await measureMove(i));
   }
 
   await prepareReferenceState(page);
-  const devicesTab = page.getByTestId('sidebar-tab-devices');
-  const search = page.getByTestId('search-devices');
-  const viewTab = page.locator(locators.sidePanel.tabView);
-  const editTab = page.locator(locators.sidePanel.tabEdit);
 
-  const representativeOperation = async (iteration: number) => {
-    await devicesTab.click();
-    await expect(search).toBeVisible();
-    await search.fill('switch');
-    await page.waitForTimeout(175);
-    await search.clear();
-    await page.waitForTimeout(175);
-    await firstDevice.focus();
-    await page.keyboard.press(iteration % 2 === 0 ? 'ArrowUp' : 'ArrowDown');
-    await viewTab.click();
-    await editTab.click();
-    await nextPaint(page);
+  const representativeSelectors = {
+    devicesTab: '[data-testid="sidebar-tab-devices"]',
+    search: '[data-testid="search-devices"]',
+    device: locators.rack.device,
+    viewTab: locators.sidePanel.tabView,
+    editTab: locators.sidePanel.tabEdit,
   };
 
+  const measureRepresentativeOperation = async (iteration: number) =>
+    page.evaluate(
+      async ({ selectors, key }) => {
+        const nextFrame = () =>
+          new Promise<void>((resolvePaint) => requestAnimationFrame(() => resolvePaint()));
+        const wait = (milliseconds: number) =>
+          new Promise<void>((resolveWait) => setTimeout(resolveWait, milliseconds));
+        const required = <T extends Element>(selector: string) => {
+          const element = document.querySelector<T>(selector);
+          if (!element) throw new Error(`Step 17 selector not found: ${selector}`);
+          return element;
+        };
+
+        const devicesTab = required<HTMLElement>(selectors.devicesTab);
+        const search = required<HTMLInputElement>(selectors.search);
+        const device = required<HTMLElement>(selectors.device);
+        const viewTab = required<HTMLElement>(selectors.viewTab);
+        const editTab = required<HTMLElement>(selectors.editTab);
+
+        const start = performance.now();
+
+        devicesTab.click();
+        await nextFrame();
+
+        search.value = 'switch';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(175);
+        await nextFrame();
+
+        search.value = '';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        await wait(175);
+        await nextFrame();
+
+        device.focus();
+        device.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            code: key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        await nextFrame();
+
+        viewTab.click();
+        await nextFrame();
+        editTab.click();
+        await nextFrame();
+        await nextFrame();
+
+        return Math.round((performance.now() - start) * 100) / 100;
+      },
+      {
+        selectors: representativeSelectors,
+        key: iteration % 2 === 0 ? 'ArrowUp' : 'ArrowDown',
+      },
+    );
+
   for (let i = 0; i < warmupCount; i += 1) {
-    await representativeOperation(i);
+    await measureRepresentativeOperation(i);
   }
 
   for (let i = 0; i < sampleCount; i += 1) {
-    samples.representativeManipulation.push(
-      await timed(async () => representativeOperation(i)),
-    );
+    samples.representativeManipulation.push(await measureRepresentativeOperation(i));
   }
 
   writeEvidence();
