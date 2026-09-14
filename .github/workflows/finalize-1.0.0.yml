@@ -1,0 +1,104 @@
+name: Finalize RACKULA 1.0.0
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/finalize-1.0.0.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-release:
+    if: github.repository == 'BECT75/rackula'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: '1.0.0'
+      RELEASE_SHA: 'edd9bf832d2f6e3058a7c750818f155298a6e2d6'
+      PROD_REPO: 'BECT75/rackula-prod'
+      PROD_REPO_SHA: 'ea073cdf9c35810d1716bb63efb8ca5b5b6a94ef'
+      PROD_RUN_ID: '34816546207'
+      PROD_URL: 'https://bect75.github.io/rackula-prod/'
+
+    steps:
+      - name: Verify homologated application commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}" --jq '.sha')"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Verify production evidence
+        run: |
+          set -euo pipefail
+          run_json="$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${PROD_REPO}/actions/runs/${PROD_RUN_ID}")"
+          test "$(printf '%s' "${run_json}" | jq -r '.conclusion')" = 'success'
+          test "$(printf '%s' "${run_json}" | jq -r '.head_sha')" = "${PROD_REPO_SHA}"
+
+          manifest="$(curl -fsSL "https://raw.githubusercontent.com/${PROD_REPO}/${PROD_REPO_SHA}/production-release.json")"
+          test "$(printf '%s' "${manifest}" | jq -r '.release')" = "${RELEASE_TAG}"
+          test "$(printf '%s' "${manifest}" | jq -r '.sourceCommit')" = "${RELEASE_SHA}"
+          test "$(printf '%s' "${manifest}" | jq -r '.productionUrl')" = "${PROD_URL}"
+
+      - name: Create or verify immutable final tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha' 2>/dev/null || true)"
+
+          if [ -n "${existing_sha}" ]; then
+            if [ "${existing_sha}" != "${RELEASE_SHA}" ]; then
+              echo "Tag ${RELEASE_TAG} already exists on ${existing_sha}; refusing to move it." >&2
+              exit 1
+            fi
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              --raw-field "ref=refs/tags/${RELEASE_TAG}" \
+              --raw-field "sha=${RELEASE_SHA}" >/dev/null
+          fi
+
+          resolved_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')"
+          test "${resolved_sha}" = "${RELEASE_SHA}"
+
+      - name: Create or verify GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/release-notes.md <<EOF
+          RACKULA 1.0.0 production release for BECT75.
+
+          - Homologated application commit: \`${RELEASE_SHA}\`
+          - Qualified application version: \`1.0.0-rc.3\`
+          - Production control repository: \`${PROD_REPO}\`
+          - Production control commit: \`${PROD_REPO_SHA}\`
+          - Successful production workflow run: \`${PROD_RUN_ID}\`
+          - Production URL: ${PROD_URL}
+
+          This release tag is intentionally pinned to the exact application commit that passed qualification and was deployed to production.
+          EOF
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            existing_tag="$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json tagName --jq '.tagName')"
+            test "${existing_tag}" = "${RELEASE_TAG}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title 'RACKULA 1.0.0' \
+              --notes-file /tmp/release-notes.md
+          fi
+
+      - name: Final release assertions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')" = "${RELEASE_SHA}"
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')" = 'false'
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isPrerelease --jq '.isPrerelease')" = 'false'
