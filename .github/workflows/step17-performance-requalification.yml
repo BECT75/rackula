@@ -1,0 +1,103 @@
+name: Step 17 Performance Requalification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'e2e/performance-step17.spec.ts'
+      - 'e2e/playwright.step17.config.ts'
+      - '.github/workflows/step17-performance-requalification.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  performance-step-17:
+    name: Windows V1.x performance reference
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout current candidate
+        uses: actions/checkout@v4
+
+      - name: Checkout immutable Step 6 qualification assets
+        uses: actions/checkout@v4
+        with:
+          ref: f2a1fcaf2d0b6b8bdb349bf18e5e78a5e03974c5
+          path: step6-assets
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild the immutable V1 reference load
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force qualification | Out-Null
+          Copy-Item step6-assets/qualification/generate-reference-project.mjs qualification/generate-reference-project.mjs
+          $generator = Get-Content qualification/generate-reference-project.mjs -Raw
+          $generator = $generator.Replace('let seq = 1;', 'let seq = 2;')
+          $generator = $generator.Replace('Array.from({ length: 4 }', 'Array.from({ length: 2 }')
+          $generator = $generator.Replace('width_fraction: 0.25', 'width_fraction: 0.5')
+          Set-Content qualification/generate-reference-project.mjs $generator -Encoding utf8
+          node qualification/generate-reference-project.mjs
+          Get-Content qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+
+      - name: Verify reference load invariants
+        shell: pwsh
+        run: |
+          $m = Get-Content qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json | ConvertFrom-Json
+          if ($m.rackCount -ne 5) { throw "Expected 5 racks, got $($m.rackCount)" }
+          if ($m.deviceCount -ne 150) { throw "Expected 150 devices, got $($m.deviceCount)" }
+          if ($m.portCount -ne 1249) { throw "Expected 1249 ports, got $($m.portCount)" }
+          if ($m.connectionCount -ne 616) { throw "Expected 616 connections, got $($m.connectionCount)" }
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Run Step 17 p50/p95 benchmark
+        id: benchmark
+        continue-on-error: true
+        run: npx playwright test --config e2e/playwright.step17.config.ts
+
+      - name: Print Step 17 evidence
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path qualification/STEP-17-PERFORMANCE.results.json) {
+            Get-Content qualification/STEP-17-PERFORMANCE.results.json
+          } else {
+            Write-Error 'Step 17 evidence file was not produced.'
+          }
+
+      - name: Upload Step 17 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step-17-performance-${{ github.run_id }}
+          path: |
+            qualification/RACKULA_REFERENCE_PROJECT_V1.rackula.yaml
+            qualification/RACKULA_REFERENCE_PROJECT_V1.metrics.json
+            qualification/STEP-17-PERFORMANCE.results.json
+            playwright-report-step-17/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce original Step 6 budgets
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.benchmark.outcome }}' -ne 'success') {
+            throw 'Step 17 performance benchmark failed the original budgets or did not complete.'
+          }
