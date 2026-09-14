@@ -1,0 +1,160 @@
+name: Step 18 V1.x Maintenance Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: step18-v1x-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  V1_TAG: "1.0.0"
+  V1_COMMIT: "edd9bf832d2f6e3058a7c750818f155298a6e2d6"
+  PROD_CONTRACT_URL: "https://raw.githubusercontent.com/BECT75/rackula-prod/main/production-release.json"
+
+jobs:
+  baseline-integrity:
+    name: immutable V1.0.0 baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout candidate with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify immutable 1.0.0 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-list -n 1 "$V1_TAG")"
+          echo "tag=$V1_TAG"
+          echo "expected=$V1_COMMIT"
+          echo "actual=$actual"
+          test "$actual" = "$V1_COMMIT"
+
+      - name: Fetch production release contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qualification
+          curl --fail --silent --show-error --location \
+            "$PROD_CONTRACT_URL" \
+            --output qualification/production-release.json
+          cat qualification/production-release.json
+
+      - name: Validate production contract and write evidence
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+
+          const contract = JSON.parse(
+            readFileSync('qualification/production-release.json', 'utf8'),
+          );
+          const expected = {
+            release: '1.0.0',
+            applicationVersion: '1.0.0-rc.3',
+            sourceRepository: 'BECT75/rackula',
+            sourceCommit: 'edd9bf832d2f6e3058a7c750818f155298a6e2d6',
+            basePath: '/rackula-prod/',
+            productionUrl: 'https://bect75.github.io/rackula-prod/',
+          };
+
+          const mismatches = Object.entries(expected)
+            .filter(([key, value]) => contract[key] !== value)
+            .map(([key, value]) => ({ key, expected: value, actual: contract[key] }));
+
+          const evidence = {
+            step: 18,
+            check: 'v1x-maintenance-baseline-integrity',
+            checked_at: new Date().toISOString(),
+            candidate_sha: process.env.GITHUB_SHA,
+            immutable_release: {
+              tag: process.env.V1_TAG,
+              expected_commit: process.env.V1_COMMIT,
+            },
+            production_contract: contract,
+            expected_production_contract: expected,
+            mismatches,
+            gate_status: mismatches.length === 0 ? 'PASS' : 'FAIL',
+          };
+
+          mkdirSync('qualification', { recursive: true });
+          writeFileSync(
+            'qualification/STEP-18-BASELINE-INTEGRITY.results.json',
+            `${JSON.stringify(evidence, null, 2)}\n`,
+          );
+
+          if (mismatches.length > 0) {
+            console.error('Production release contract differs from the immutable V1.0.0 baseline.');
+            console.error(JSON.stringify(mismatches, null, 2));
+            process.exit(1);
+          }
+          NODE
+          cat qualification/STEP-18-BASELINE-INTEGRITY.results.json
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step-18-baseline-${{ github.run_id }}
+          path: |
+            qualification/production-release.json
+            qualification/STEP-18-BASELINE-INTEGRITY.results.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  dependency-audit:
+    name: dependency audit HIGH gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit all dependencies at HIGH threshold
+        shell: bash
+        run: |
+          set +e
+          mkdir -p qualification
+          npm audit --audit-level=high --json > qualification/STEP-18-NPM-AUDIT.json
+          audit_status=$?
+          set -e
+          cat qualification/STEP-18-NPM-AUDIT.json
+          if [ "$audit_status" -ne 0 ]; then
+            echo "npm audit reported HIGH or CRITICAL vulnerabilities."
+            exit "$audit_status"
+          fi
+
+      - name: Upload dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step-18-npm-audit-${{ github.run_id }}
+          path: qualification/STEP-18-NPM-AUDIT.json
+          if-no-files-found: warn
+          retention-days: 90
