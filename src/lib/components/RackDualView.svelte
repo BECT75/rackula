@@ -402,11 +402,7 @@
              FRONT / REAR / SIDE remain visually aligned. Hidden on phone layouts. -->
         <div class="rack-side-main" data-testid="rack-side-main">
           <div class="rack-side-main-label" aria-hidden="true">SIDE</div>
-          <RackSideView
-            {rack}
-            {deviceLibrary}
-            unitHeightPx={U_HEIGHT_PX}
-          />
+          <RackSideView {rack} {deviceLibrary} unitHeightPx={U_HEIGHT_PX} />
         </div>
 
         <!-- Balancing spacer to keep rack centered when annotations are shown -->
