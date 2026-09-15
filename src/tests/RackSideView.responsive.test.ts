@@ -28,11 +28,11 @@ describe("RackSideView responsive geometry", () => {
   it("lets the side view shrink to its mobile container", () => {
     expect(source).toContain("width: min(100%, 220px)");
     expect(source).toContain("max-width: 100%");
-    expect(source).toMatch(/\.side-elevation\s*{[^}]*width:\s*100%/s);
-    expect(source).toMatch(/\.side-view-scale\s*{[^}]*width:\s*100%/s);
+    expect(source).toMatch(/\.side-elevation\s*\{[^}]*width:\s*100%/s);
+    expect(source).toMatch(/\.side-view-scale\s*\{[^}]*width:\s*100%/s);
   });
 
   it("keeps device borders and padding inside percentage widths", () => {
-    expect(source).toMatch(/\.side-device\s*{[^}]*box-sizing:\s*border-box/s);
+    expect(source).toMatch(/\.side-device\s*\{[^}]*box-sizing:\s*border-box/s);
   });
 });
