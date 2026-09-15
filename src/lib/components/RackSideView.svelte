@@ -17,9 +17,12 @@
 
   let { rack, deviceLibrary }: Props = $props();
 
-  const rackDepthMm = $derived(rack.depth_mm ?? 1000);
+  const rackDepthMm = $derived(
+    typeof rack.depth_mm === "number" && rack.depth_mm > 0
+      ? rack.depth_mm
+      : 1000,
+  );
   const rackHeightPx = $derived(Math.max(180, rack.height * 8));
-  const maxDepthPx = 220;
 
   function findType(device: PlacedDevice): DeviceType | undefined {
     return deviceLibrary.find((type) => type.slug === device.device_type);
@@ -59,14 +62,18 @@
     return base;
   }
 
-  function deviceLeftPx(device: PlacedDevice): number {
-    const depthPx = (equipmentDepthMm(device) / rackDepthMm) * maxDepthPx;
-    if (device.face === "rear") return maxDepthPx - depthPx;
-    return 0;
+  // Horizontal geometry is expressed as a percentage of the rendered rack
+  // depth. The side elevation is allowed to shrink below its desktop width on
+  // narrow containers, so fixed pixel coordinates would otherwise leave rear
+  // devices offset or clipped on mobile.
+  function deviceWidthPercent(device: PlacedDevice): number {
+    return (equipmentDepthMm(device) / rackDepthMm) * 100;
   }
 
-  function deviceWidthPx(device: PlacedDevice): number {
-    return Math.max(12, (equipmentDepthMm(device) / rackDepthMm) * maxDepthPx);
+  function deviceLeftPercent(device: PlacedDevice): number {
+    const depthPercent = deviceWidthPercent(device);
+    if (device.face === "rear") return 100 - depthPercent;
+    return 0;
   }
 
   function label(device: PlacedDevice): string {
@@ -90,10 +97,7 @@
     <span>REAR</span>
   </div>
 
-  <div
-    class="side-elevation"
-    style={`--rack-height:${rackHeightPx}px; --rack-depth:${maxDepthPx}px`}
-  >
+  <div class="side-elevation" style={`--rack-height:${rackHeightPx}px`}>
     <div class="rail rail-front" data-testid="rack-side-front-rail"></div>
     <div class="rail rail-rear" data-testid="rack-side-rear-rail"></div>
     <div class="frame frame-top"></div>
@@ -104,7 +108,7 @@
         class="side-device"
         data-testid="rack-side-device"
         data-device-id={device.id}
-        style={`left:${deviceLeftPx(device)}px; width:${deviceWidthPx(device)}px; bottom:${deviceBottomPx(device)}px; height:${deviceHeightPx(device)}px`}
+        style={`left:${deviceLeftPercent(device)}%; width:${deviceWidthPercent(device)}%; bottom:${deviceBottomPx(device)}px; height:${deviceHeightPx(device)}px`}
         title={`${label(device)} — ${equipmentDepthMm(device)} mm`}
       >
         <span>{label(device)}</span>
@@ -118,6 +122,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+    width: min(100%, 220px);
+    max-width: 100%;
     min-width: 0;
   }
 
@@ -126,7 +132,8 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--space-2);
-    width: min(100%, 240px);
+    width: 100%;
+    min-width: 0;
     font-size: var(--font-size-xs);
     color: var(--colour-text-muted);
   }
@@ -137,8 +144,8 @@
 
   .side-elevation {
     position: relative;
-    width: var(--rack-depth);
-    max-width: 100%;
+    box-sizing: border-box;
+    width: 100%;
     height: var(--rack-height);
     min-height: 180px;
     border: 1px solid var(--colour-border);
@@ -191,7 +198,7 @@
     position: absolute;
     display: flex;
     align-items: center;
-    min-width: 12px;
+    box-sizing: border-box;
     padding: 0 3px;
     border: 1px solid var(--colour-selection);
     background: color-mix(

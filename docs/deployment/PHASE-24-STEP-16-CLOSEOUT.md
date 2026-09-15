@@ -12,16 +12,16 @@ This closeout does **not** rebuild or modify the production payload. It records 
 
 ## 2. Authoritative production baseline
 
-| Item | Authoritative value |
-| --- | --- |
-| Final release | `1.0.0` |
-| Final tag | `1.0.0` |
-| Homologated source commit | `edd9bf832d2f6e3058a7c750818f155298a6e2d6` |
-| Promoted application build | `1.0.0-rc.3` |
-| Source repository | `BECT75/rackula` |
-| Production repository | `BECT75/rackula-prod` |
-| Production base path | `/rackula-prod/` |
-| Production URL | `https://bect75.github.io/rackula-prod/` |
+| Item                       | Authoritative value                        |
+| -------------------------- | ------------------------------------------ |
+| Final release              | `1.0.0`                                    |
+| Final tag                  | `1.0.0`                                    |
+| Homologated source commit  | `edd9bf832d2f6e3058a7c750818f155298a6e2d6` |
+| Promoted application build | `1.0.0-rc.3`                               |
+| Source repository          | `BECT75/rackula`                           |
+| Production repository      | `BECT75/rackula-prod`                      |
+| Production base path       | `/rackula-prod/`                           |
+| Production URL             | `https://bect75.github.io/rackula-prod/`   |
 
 The final `1.0.0` release deliberately promotes the already homologated `1.0.0-rc.3` payload. Therefore the production manifest can report `applicationVersion: 1.0.0-rc.3` while the immutable external release is `1.0.0`. This is expected and preserves artifact identity.
 
