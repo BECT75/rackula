@@ -13,16 +13,21 @@
   interface Props {
     rack: Rack;
     deviceLibrary: DeviceType[];
+    /** Vertical pixels per rack unit. Inspector preview uses 8; canvas uses 22. */
+    unitHeightPx?: number;
   }
 
-  let { rack, deviceLibrary }: Props = $props();
+  let { rack, deviceLibrary, unitHeightPx = 8 }: Props = $props();
 
   const rackDepthMm = $derived(
     typeof rack.depth_mm === "number" && rack.depth_mm > 0
       ? rack.depth_mm
       : 1000,
   );
-  const rackHeightPx = $derived(Math.max(180, rack.height * 8));
+  const safeUnitHeightPx = $derived(
+    typeof unitHeightPx === "number" && unitHeightPx > 0 ? unitHeightPx : 8,
+  );
+  const rackHeightPx = $derived(Math.max(180, rack.height * safeUnitHeightPx));
 
   function findType(device: PlacedDevice): DeviceType | undefined {
     return deviceLibrary.find((type) => type.slug === device.device_type);
@@ -48,16 +53,16 @@
 
   function deviceHeightPx(device: PlacedDevice): number {
     const type = findType(device);
-    return Math.max(6, (type?.u_height ?? 1) * 8);
+    return Math.max(6, (type?.u_height ?? 1) * safeUnitHeightPx);
   }
 
   function deviceBottomPx(device: PlacedDevice): number {
     const positionU = device.position / UNITS_PER_U;
     const type = findType(device);
     const heightU = type?.u_height ?? 1;
-    const base = Math.max(0, positionU - 1) * 8;
+    const base = Math.max(0, positionU - 1) * safeUnitHeightPx;
     if (rack.desc_units) {
-      return Math.max(0, rackHeightPx - (base + heightU * 8));
+      return Math.max(0, rackHeightPx - (base + heightU * safeUnitHeightPx));
     }
     return base;
   }
@@ -97,7 +102,10 @@
     <span>REAR</span>
   </div>
 
-  <div class="side-elevation" style={`--rack-height:${rackHeightPx}px`}>
+  <div
+    class="side-elevation"
+    style={`--rack-height:${rackHeightPx}px; --unit-height:${safeUnitHeightPx}px`}
+  >
     <div class="rail rail-front" data-testid="rack-side-front-rail"></div>
     <div class="rail rail-rear" data-testid="rack-side-rear-rail"></div>
     <div class="frame frame-top"></div>
@@ -154,7 +162,7 @@
       color-mix(in srgb, var(--colour-border) 28%, transparent) 1px,
       transparent 1px
     );
-    background-size: 100% 8px;
+    background-size: 100% var(--unit-height);
     overflow: hidden;
   }
 
