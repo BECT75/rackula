@@ -16,12 +16,12 @@ jobs:
     if: github.repository == 'BECT75/rackula'
     runs-on: ubuntu-latest
     env:
-      RELEASE_TAG: '1.0.0'
-      RELEASE_SHA: 'edd9bf832d2f6e3058a7c750818f155298a6e2d6'
-      PROD_REPO: 'BECT75/rackula-prod'
-      PROD_REPO_SHA: 'ea073cdf9c35810d1716bb63efb8ca5b5b6a94ef'
-      PROD_RUN_ID: '34816546207'
-      PROD_URL: 'https://bect75.github.io/rackula-prod/'
+      RELEASE_TAG: "1.0.0"
+      RELEASE_SHA: "edd9bf832d2f6e3058a7c750818f155298a6e2d6"
+      PROD_REPO: "BECT75/rackula-prod"
+      PROD_REPO_SHA: "ea073cdf9c35810d1716bb63efb8ca5b5b6a94ef"
+      PROD_RUN_ID: "34816546207"
+      PROD_URL: "https://bect75.github.io/rackula-prod/"
 
     steps:
       - name: Verify homologated application commit
