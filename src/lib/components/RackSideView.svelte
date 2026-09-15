@@ -27,9 +27,7 @@
   const safeUnitHeightPx = $derived(
     typeof unitHeightPx === "number" && unitHeightPx > 0 ? unitHeightPx : 8,
   );
-  const rackHeightPx = $derived(
-    Math.max(180, rack.height * safeUnitHeightPx),
-  );
+  const rackHeightPx = $derived(Math.max(180, rack.height * safeUnitHeightPx));
 
   function findType(device: PlacedDevice): DeviceType | undefined {
     return deviceLibrary.find((type) => type.slug === device.device_type);
@@ -64,10 +62,7 @@
     const heightU = type?.u_height ?? 1;
     const base = Math.max(0, positionU - 1) * safeUnitHeightPx;
     if (rack.desc_units) {
-      return Math.max(
-        0,
-        rackHeightPx - (base + heightU * safeUnitHeightPx),
-      );
+      return Math.max(0, rackHeightPx - (base + heightU * safeUnitHeightPx));
     }
     return base;
   }
