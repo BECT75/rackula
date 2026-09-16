@@ -128,6 +128,51 @@
   const canvasStore = getCanvasStore();
   const placementStore = getPlacementStore();
 
+  type RackWithPhysicalDimensions = RackType & {
+    overall_height_mm?: unknown;
+    body_height_mm?: unknown;
+    caster_height_mm?: unknown;
+    wheel_height_mm?: unknown;
+    overall_width_mm?: unknown;
+    width_mm?: unknown;
+    overall_depth_mm?: unknown;
+  };
+
+  function positiveMm(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) && value > 0
+      ? value
+      : null;
+  }
+
+  /**
+   * Physical dimensions displayed around the desktop projections.
+   * Explicit overall dimensions win when present. Legacy layouts fall back to
+   * the nominal rack geometry so dimensions remain visible immediately.
+   * Caster / wheel height is added only when no explicit overall height exists.
+   */
+  const rackDimensionsMm = $derived.by(() => {
+    const physical = rack as RackWithPhysicalDimensions;
+    const casterHeight =
+      positiveMm(physical.caster_height_mm) ??
+      positiveMm(physical.wheel_height_mm) ??
+      0;
+    const explicitOverallHeight = positiveMm(physical.overall_height_mm);
+    const bodyHeight =
+      positiveMm(physical.body_height_mm) ?? Math.round(rack.height * 44.45);
+    const width =
+      positiveMm(physical.overall_width_mm) ??
+      positiveMm(physical.width_mm) ??
+      rack.width * 25.4;
+    const depth =
+      positiveMm(physical.overall_depth_mm) ?? positiveMm(rack.depth_mm) ?? 1000;
+
+    return {
+      height: Math.round(explicitOverallHeight ?? bodyHeight + casterHeight),
+      width: Math.round(width),
+      depth: Math.round(depth),
+    };
+  });
+
   // Element reference for long press
   let containerElement: HTMLDivElement | null = $state(null);
   const rackDualLongPressDebug = appDebug.mobile.extend("rack-dual-view");
@@ -338,7 +383,12 @@
         {/if}
 
         <!-- Front view -->
-        <div class="rack-front" data-testid="rack-front" role="presentation">
+        <div
+          class="rack-front"
+          data-testid="rack-front"
+          role="presentation"
+          style={`--projection-height:${rack.height * U_HEIGHT_PX + 18}px`}
+        >
           <Rack
             {rack}
             {deviceLibrary}
@@ -364,6 +414,42 @@
               <BananaForScale />
             </div>
           {/if}
+
+          <div
+            class="rack-dimension rack-dimension-horizontal"
+            data-testid="rack-width-dimension"
+            aria-label={`Overall rack width ${rackDimensionsMm.width} millimetres`}
+          >
+            <span class="dimension-line" aria-hidden="true"></span>
+            <span
+              class="dimension-arrow dimension-arrow-horizontal-start"
+              aria-hidden="true"
+            ></span>
+            <span
+              class="dimension-arrow dimension-arrow-horizontal-end"
+              aria-hidden="true"
+            ></span>
+            <span class="dimension-value">{rackDimensionsMm.width} mm</span>
+          </div>
+
+          <div
+            class="rack-dimension rack-dimension-vertical"
+            data-testid="rack-height-dimension"
+            aria-label={`Overall rack height ${rackDimensionsMm.height} millimetres`}
+          >
+            <span class="dimension-line" aria-hidden="true"></span>
+            <span
+              class="dimension-arrow dimension-arrow-vertical-start"
+              aria-hidden="true"
+            ></span>
+            <span
+              class="dimension-arrow dimension-arrow-vertical-end"
+              aria-hidden="true"
+            ></span>
+            <span class="dimension-value dimension-value-vertical"
+              >{rackDimensionsMm.height} mm</span
+            >
+          </div>
         </div>
 
         <!-- Rear view (conditionally shown based on rack.show_rear) -->
@@ -401,8 +487,28 @@
              this projection uses the same 22 px/U vertical scale as Rack.svelte so
              FRONT / REAR / SIDE remain visually aligned. Hidden on phone layouts. -->
         <div class="rack-side-main" data-testid="rack-side-main">
-          <div class="rack-side-main-label" aria-hidden="true">SIDE</div>
+          <div class="rack-side-main-label" aria-label="Side view orientation">
+            <span>FRONT</span>
+            <strong>SIDE</strong>
+            <span>REAR</span>
+          </div>
           <RackSideView {rack} {deviceLibrary} unitHeightPx={U_HEIGHT_PX} />
+          <div
+            class="rack-dimension rack-dimension-horizontal"
+            data-testid="rack-depth-dimension"
+            aria-label={`Overall rack depth ${rackDimensionsMm.depth} millimetres`}
+          >
+            <span class="dimension-line" aria-hidden="true"></span>
+            <span
+              class="dimension-arrow dimension-arrow-horizontal-start"
+              aria-hidden="true"
+            ></span>
+            <span
+              class="dimension-arrow dimension-arrow-horizontal-end"
+              aria-hidden="true"
+            ></span>
+            <span class="dimension-value">{rackDimensionsMm.depth} mm</span>
+          </div>
         </div>
 
         <!-- Balancing spacer to keep rack centered when annotations are shown -->
@@ -479,7 +585,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    position: relative; /* For banana positioning */
+    position: relative; /* For banana and dimension positioning */
+  }
+
+  .rack-front {
+    margin-left: 56px;
   }
 
   .rack-side-main {
@@ -490,9 +600,9 @@
   .rack-side-main-label {
     width: 100%;
     height: 18px;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: center;
     box-sizing: border-box;
     border: 1px solid var(--colour-border);
     border-bottom: 0;
@@ -500,6 +610,16 @@
     color: var(--colour-text-muted);
     font-size: var(--font-size-xs);
     letter-spacing: 0.04em;
+    padding: 0 6px;
+  }
+
+  .rack-side-main-label strong {
+    color: var(--colour-text);
+    font-weight: var(--font-weight-medium, 500);
+  }
+
+  .rack-side-main-label span:last-child {
+    text-align: right;
   }
 
   .rack-side-main :global(.side-view) {
@@ -508,8 +628,112 @@
     gap: 0;
   }
 
+  /* The desktop header itself carries FRONT / SIDE / REAR. Removing the compact
+     inspector scale is what keeps the SIDE chassis aligned with FRONT and REAR. */
   .rack-side-main :global(.side-view-scale) {
-    min-height: 22px;
+    display: none;
+  }
+
+  .rack-dimension {
+    color: color-mix(in srgb, var(--colour-text-muted) 88%, transparent);
+    font-family: var(--font-family, system-ui, sans-serif);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .rack-dimension-horizontal {
+    position: relative;
+    align-self: stretch;
+    height: 34px;
+    margin-top: 6px;
+    min-width: 100%;
+  }
+
+  .rack-dimension-horizontal .dimension-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 17px;
+    height: 1px;
+    background: currentColor;
+  }
+
+  .dimension-arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+  }
+
+  .dimension-arrow-horizontal-start {
+    left: 0;
+    top: 13px;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-right: 7px solid currentColor;
+  }
+
+  .dimension-arrow-horizontal-end {
+    right: 0;
+    top: 13px;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 7px solid currentColor;
+  }
+
+  .dimension-value {
+    position: absolute;
+    left: 50%;
+    top: 17px;
+    transform: translate(-50%, -50%);
+    box-sizing: border-box;
+    white-space: nowrap;
+    padding: 3px 6px;
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius-sm, 3px);
+    background: var(--colour-surface-raised, var(--drawer-bg));
+    color: var(--colour-text);
+    font-weight: var(--font-weight-medium, 500);
+  }
+
+  .rack-dimension-vertical {
+    position: absolute;
+    left: -52px;
+    top: 0;
+    width: 38px;
+    height: var(--projection-height);
+  }
+
+  .rack-dimension-vertical .dimension-line {
+    position: absolute;
+    left: 19px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: currentColor;
+  }
+
+  .dimension-arrow-vertical-start {
+    left: 15px;
+    top: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 7px solid currentColor;
+  }
+
+  .dimension-arrow-vertical-end {
+    left: 15px;
+    bottom: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 7px solid currentColor;
+  }
+
+  .dimension-value-vertical {
+    left: 19px;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
   }
 
   /* Remove individual rack selection styling since we handle it at container level */
@@ -526,8 +750,13 @@
   /* Keep the primary canvas projections compact on phone layouts. The responsive
      side elevation remains available from the View sheet/panel. */
   @media (max-width: 767px) {
-    .rack-side-main {
+    .rack-side-main,
+    .rack-dimension {
       display: none;
+    }
+
+    .rack-front {
+      margin-left: 0;
     }
   }
 
