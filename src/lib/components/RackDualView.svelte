@@ -1,7 +1,7 @@
 <!--
   RackDualView Component
-  Renders front and rear views of a rack side-by-side
-  Replaces single-view Rack with toggle
+  Renders front, rear and desktop side views of a rack
+  Replaces single-view Rack with coordinated projections
 -->
 <script lang="ts">
   import type {
@@ -12,6 +12,7 @@
     AnnotationField,
   } from "$lib/types";
   import Rack from "./Rack.svelte";
+  import RackSideView from "./RackSideView.svelte";
   import AnnotationColumn from "./AnnotationColumn.svelte";
   import BananaForScale from "./BananaForScale.svelte";
   import RackContextMenu from "./RackContextMenu.svelte";
@@ -21,6 +22,7 @@
   import { hapticTap } from "$lib/utils/haptics";
   import { getCanvasStore } from "$lib/stores/canvas.svelte";
   import { getPlacementStore } from "$lib/stores/placement.svelte";
+  import { U_HEIGHT_PX } from "$lib/constants/layout";
 
   interface Props {
     rack: RackType;
@@ -318,15 +320,15 @@
       role="listitem"
       aria-current={isActive ? "location" : undefined}
       aria-label="{rack.name}, {rack.height}U rack, {rack.show_rear
-        ? 'front and rear view'
-        : 'front view only'}{isActive ? ', active' : ''}{selected
+        ? 'front, rear and side view'
+        : 'front and side view'}{isActive ? ', active' : ''}{selected
         ? ', selected'
         : ''}"
       onclick={handleContainerClick}
       onkeydown={handleKeyDown}
       style:--long-press-progress={longPressProgress}
     >
-      <!-- Rack name centered above both views -->
+      <!-- Rack name centered above all projections -->
       <div class="rack-dual-view-name">{rack.name}</div>
 
       <div class="rack-dual-view-container" class:single-view={!rack.show_rear}>
@@ -394,6 +396,14 @@
             {/if}
           </div>
         {/if}
+
+        <!-- Desktop canvas side elevation. The inspector keeps its compact preview;
+             this projection uses the same 22 px/U vertical scale as Rack.svelte so
+             FRONT / REAR / SIDE remain visually aligned. Hidden on phone layouts. -->
+        <div class="rack-side-main" data-testid="rack-side-main">
+          <div class="rack-side-main-label" aria-hidden="true">SIDE</div>
+          <RackSideView {rack} {deviceLibrary} unitHeightPx={U_HEIGHT_PX} />
+        </div>
 
         <!-- Balancing spacer to keep rack centered when annotations are shown -->
         {#if showAnnotations}
@@ -464,11 +474,42 @@
   }
 
   .rack-front,
-  .rack-rear {
+  .rack-rear,
+  .rack-side-main {
     display: flex;
     flex-direction: column;
     align-items: center;
     position: relative; /* For banana positioning */
+  }
+
+  .rack-side-main {
+    width: 220px;
+    flex: 0 0 220px;
+  }
+
+  .rack-side-main-label {
+    width: 100%;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 1px solid var(--colour-border);
+    border-bottom: 0;
+    background: var(--colour-surface-raised, var(--drawer-bg));
+    color: var(--colour-text-muted);
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.04em;
+  }
+
+  .rack-side-main :global(.side-view) {
+    width: 220px;
+    max-width: 220px;
+    gap: 0;
+  }
+
+  .rack-side-main :global(.side-view-scale) {
+    min-height: 22px;
   }
 
   /* Remove individual rack selection styling since we handle it at container level */
@@ -480,6 +521,14 @@
   .rack-front :global(.rack-container:focus),
   .rack-rear :global(.rack-container:focus) {
     outline: none !important;
+  }
+
+  /* Keep the primary canvas projections compact on phone layouts. The responsive
+     side elevation remains available from the View sheet/panel. */
+  @media (max-width: 767px) {
+    .rack-side-main {
+      display: none;
+    }
   }
 
   /* Balancing spacer matches annotation column width to keep rack centered */
