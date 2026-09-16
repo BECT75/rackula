@@ -19,9 +19,7 @@ test.describe("RACKULA CT side elevation", () => {
     await expect(
       mainSideView.getByTestId("rack-side-front-rail"),
     ).toBeVisible();
-    await expect(
-      mainSideView.getByTestId("rack-side-rear-rail"),
-    ).toBeVisible();
+    await expect(mainSideView.getByTestId("rack-side-rear-rail")).toBeVisible();
     await expect(
       mainSideView.getByTestId("rack-side-device").first(),
     ).toBeVisible();
