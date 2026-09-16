@@ -16,9 +16,15 @@ test.describe("RACKULA CT side elevation", () => {
       "aria-label",
       /depth 1000 millimetres/,
     );
-    await expect(mainSideView.getByTestId("rack-side-front-rail")).toBeVisible();
-    await expect(mainSideView.getByTestId("rack-side-rear-rail")).toBeVisible();
-    await expect(mainSideView.getByTestId("rack-side-device").first()).toBeVisible();
+    await expect(
+      mainSideView.getByTestId("rack-side-front-rail"),
+    ).toBeVisible();
+    await expect(
+      mainSideView.getByTestId("rack-side-rear-rail"),
+    ).toBeVisible();
+    await expect(
+      mainSideView.getByTestId("rack-side-device").first(),
+    ).toBeVisible();
 
     await page.getByTestId("side-panel-tab-view").click();
 
